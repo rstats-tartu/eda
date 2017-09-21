@@ -1,2 +1,5 @@
-# eda
-exploratory data analysis materials
+# EDA
+Exploratory data analysis materials.
+
+Under construction.
+
