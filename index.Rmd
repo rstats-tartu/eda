@@ -1,9 +1,12 @@
 ---
 title: "Exploratory data analysis -- Estonian cancer data"
 author: "Taavi Päll"
-date: "21 9 2017"
+date: "26. Sept. 2017"
 bibliography: eda.bib
-output: html_document
+output: 
+  html_document:
+    theme: readable
+  
 ---
 
 ```{r setup, include=FALSE}
@@ -58,21 +61,44 @@ Detailed information about variables in this dataset can be found from [here](ht
 ```{r,echo=FALSE, fig.cap="Screen caption from dataset download page. Note that data was downloaded in JSON format."}
 knitr::include_graphics("img/tai-page.png")
 ```
+For your convenience, we have downloaded this dataset into ["rstats-tart/datasets"](https://github.com/rstats-tartu/datasets) GitHub repo. 
+
+
+## Create RStudio project 
+Create RStudio project from GitHub repo. First create GitHub repo and call it `eda_demo`. Further instructions can be found [here](https://rstats-tartu.github.io/createrstudioprojectfromgithub/).
+
+
+## Download PK10 data from GitHub
+Download "cancer_incidence_PK10.json" file from "rstats-tartu/datasets" GitHub repo: 
+```{r, eval=FALSE}
+url <- "https://raw.githubusercontent.com/rstats-tartu/datasets/master/cancer_incidence_PK10.json"
+dir.create("data")
+download.file(url, "data/cancer_incidence_PK10.json")
+```
 
 ## Import and prepare data
 
 First we download `tidyverse` library:
-```{r}
+```{r, message=FALSE}
 library(tidyverse)
 ```
+
+
+Download dataset from "rstats-tartu/datasets" GitHub repo:
+```{r}
+url <- "https://raw.githubusercontent.com/rstats-tartu/datasets/master/cancer_incidence_PK10.json"
+dir.create("data")
+download.file(url, "data/cancer_incidence_PK10.json")
+```
+
 
 Then we 
 
 ```{r}
 # devtools::install_github("tpall/boulder")
 library(boulder)
-json <- "data/PK10.json"
-incidence <- json_to_df(json)
+path <- "data/cancer_incidence_PK10.json"
+incidence <- json_to_df(path)
 incidence
 ```
 
