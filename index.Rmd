@@ -26,6 +26,9 @@ Kopsu-, maksa-, mao-, kolorektaal- ja rinnakasvajad põhjustavad enim vähisurma
 Sagedasemad vähitüübid on naistel ja meestel erinevad.
 Ennustatakse et haigestumus suureneb maailmas 14 miljonilt 2012. aastal 22 miljonini 2030-ndatel.
 
+
+<br>
+
 ## EDA
 Exploratory data analysis is iterative process [@wickham2017r] where you:
 
@@ -52,15 +55,22 @@ By using cancer incidence data from Estonian Cancer Registry we want to understa
 
 3. What is the most frequent cancer type in men and in women?
 
+<br>
+
 ## Cancer incidence data from Estonian cancer registry
 Estonian cancer registry data is available via [Health statistics and health research database]( http://pxweb.tai.ee/PXWeb2015/pxweb/en/02Haigestumus/02Haigestumus__04Pahaloomulised%20kasvajad/?tablelist=true&rxid=279523e2-1ea1-4a02-920b-f85bb19a908d).
 We are using cancer incidence dataset from table "PK10: New cases of malignant neoplasms by specified site, sex and age group".
 
 Detailed information about variables in this dataset can be found from [here](http://pxweb.tai.ee/PXWeb2015/Resources/PX/Databases/02Haigestumus/04Pahaloomulised%20kasvajad/PKinfo_en.htm).
 
+<br>
+
 ```{r,echo=FALSE, fig.cap="Screen caption from dataset download page. Note that data was downloaded in JSON format."}
 knitr::include_graphics("img/tai-page.png")
 ```
+
+<br>
+
 For your convenience, we have downloaded this dataset into ["rstats-tart/datasets"](https://github.com/rstats-tartu/datasets) GitHub repo. 
 
 <br>
