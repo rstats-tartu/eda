@@ -63,10 +63,12 @@ knitr::include_graphics("img/tai-page.png")
 ```
 For your convenience, we have downloaded this dataset into ["rstats-tart/datasets"](https://github.com/rstats-tartu/datasets) GitHub repo. 
 
+<br>
 
 ## Create RStudio project 
 Create RStudio project from GitHub repo. First create GitHub repo and call it `eda_demo`. Further instructions can be found [here](https://rstats-tartu.github.io/createrstudioprojectfromgithub/).
 
+<br>
 
 ## Download PK10 data from GitHub
 Download "cancer_incidence_PK10.json" file from "rstats-tartu/datasets" GitHub repo: 
@@ -75,6 +77,9 @@ url <- "https://raw.githubusercontent.com/rstats-tartu/datasets/master/cancer_in
 dir.create("data")
 download.file(url, "data/cancer_incidence_PK10.json")
 ```
+
+
+<br>
 
 ## Import and prepare data
 
