@@ -59,14 +59,14 @@ By using cancer incidence data from Estonian Cancer Registry we want to understa
 
 ## Cancer incidence data from Estonian cancer registry
 Estonian cancer registry data is available via [Health statistics and health research database]( http://pxweb.tai.ee/PXWeb2015/pxweb/en/02Haigestumus/02Haigestumus__04Pahaloomulised%20kasvajad/?tablelist=true&rxid=279523e2-1ea1-4a02-920b-f85bb19a908d).
-We are using cancer incidence dataset from table "PK10: New cases of malignant neoplasms by specified site, sex and age group".
+We are using cancer incidence dataset from table "PK30: Age-specific incidence rate of malignant neoplasms per 100 000 inhabitants by site and sex".
 
-Detailed information about variables in this dataset can be found from [here](http://pxweb.tai.ee/PXWeb2015/Resources/PX/Databases/02Haigestumus/04Pahaloomulised%20kasvajad/PKinfo_en.htm).
+Detailed information about variables in this dataset can be found from [here](http://pxweb.tai.ee/PXWeb2015/pxweb/en/02Haigestumus/02Haigestumus__04Pahaloomulised%20kasvajad/PK30.px/?rxid=3155fc9b-3ab1-40b0-9e70-beadfb6af83c).
 
 <br>
 
-```{r,echo=FALSE, fig.cap="Screen caption from dataset download page. Note that data was downloaded in JSON format."}
-knitr::include_graphics("img/tai-page.png")
+```{r,echo=FALSE, fig.cap="Screen caption from dataset download page. Note that data was downloaded in JSON format.", out.width=600}
+knitr::include_graphics("img/pk30-page.png")
 ```
 
 <br>
@@ -81,11 +81,11 @@ Create RStudio project from GitHub repo. First create GitHub repo and call it `e
 <br>
 
 ## Download cancer incidence dataset from GitHub
-Download "cancer_incidence_PK10.json" file from "rstats-tartu/datasets" GitHub repo: 
+Download "cancer_incidence_PK30.json" file from "rstats-tartu/datasets" GitHub repo: 
 ```{r, eval=FALSE}
-url <- "https://raw.githubusercontent.com/rstats-tartu/datasets/master/cancer_incidence_PK10.json"
+url <- "https://raw.githubusercontent.com/rstats-tartu/datasets/master/cancer_incidence_PK30.json"
 dir.create("data")
-download.file(url, "data/cancer_incidence_PK10.json")
+download.file(url, "data/cancer_incidence_PK30.json")
 ```
 
 
@@ -99,27 +99,20 @@ library(tidyverse)
 ```
 
 
-Download dataset from "rstats-tartu/datasets" GitHub repo:
-```{r}
-url <- "https://raw.githubusercontent.com/rstats-tartu/datasets/master/cancer_incidence_PK10.json"
-dir.create("data")
-download.file(url, "data/cancer_incidence_PK10.json")
-```
-
-
-Then we 
+Then we import dataset using `json_to_df()` function from "boulder" library. 
+If you don't have "boulder", you can install it from github "[tpall/boulder](https://github.com/tpall/boulder)":
 
 ```{r}
 # devtools::install_github("tpall/boulder")
 library(boulder)
-path <- "data/cancer_incidence_PK10.json"
+path <- "data/cancer_incidence_PK30.json"
 incidence <- json_to_df(path)
 incidence
 ```
 
 This table has data intermingled with summary data, that's bad! 
 ```
-Year  Specified site  Sex
+Year  Site  Sex
 <fctr><fctr>          <fctr>
 2000	All malignant neoplasms (C00-C97)	Men	    <- tallies
 2000	All malignant neoplasms (C00-C97)	Women	  <- tallies
@@ -143,11 +136,14 @@ label <- unique(incidence$label)
 data_source <- unique(incidence$source)
 
 ## Filter out summary rows and exclude table metadata
-incidence_filt <- filter(incidence, !summary_var(`Specified site`)) %>% 
+incidence_filt <- filter(incidence, !summary_var(Site)) %>% 
   select(-label, -source)
 ```
 
-Data is still in wide format, let's convert table into long/tidy format and filter out missing data.
+Data is **`r tolower(label)`** from `r data_source`. 
+
+
+Table is still in the wide format, let's convert table into long/tidy format and filter out missing data.
 ```{r}
 ## Values are in the age group columns
 incidence_long <- gather(incidence_filt, "age", "incidence", matches("^[[:digit:]]+"))
