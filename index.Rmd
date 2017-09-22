@@ -80,7 +80,7 @@ Create RStudio project from GitHub repo. First create GitHub repo and call it `e
 
 <br>
 
-## Download PK10 data from GitHub
+## Download cancer incidence dataset from GitHub
 Download "cancer_incidence_PK10.json" file from "rstats-tartu/datasets" GitHub repo: 
 ```{r, eval=FALSE}
 url <- "https://raw.githubusercontent.com/rstats-tartu/datasets/master/cancer_incidence_PK10.json"
