@@ -155,6 +155,9 @@ $(document).ready(function () {
 <li><p>What is the most frequent cancer type in men and in women?</p></li>
 </ol>
 <p><br></p>
+<blockquote>
+<p>However, when doing data analysis 80% of time will be spent on data munging where you also become familiar with your dataset. So it’s time well spent.</p>
+</blockquote>
 </div>
 <div id="cancer-incidence-data-from-estonian-cancer-registry" class="section level2">
 <h2>Cancer incidence data from Estonian cancer registry</h2>
@@ -168,12 +171,12 @@ Screen caption from dataset download page. Note that data was downloaded in JSON
 </p>
 </div>
 <p><br></p>
-<p>For your convenience, we have downloaded this dataset into <a href="https://github.com/rstats-tartu/datasets">“rstats-tart/datasets”</a> GitHub repo.</p>
+<p>For your convenience, we have downloaded this dataset into <a href="https://github.com/rstats-tartu/datasets">“rstats-tartu/datasets”</a> GitHub repo.</p>
 <p><br></p>
 </div>
 <div id="create-rstudio-project" class="section level2">
 <h2>Create RStudio project</h2>
-<p>Create RStudio project from GitHub repo. First create GitHub repo and call it <code>eda_demo</code>. Further instructions can be found <a href="https://rstats-tartu.github.io/createrstudioprojectfromgithub/">here</a>.</p>
+<p>Create RStudio project from GitHub repo. <em>First</em>, create GitHub repo and call it <code>eda_demo</code>. <em>Second</em>, clone this repo into RStudio project. Detailed instructions can be found <a href="https://rstats-tartu.github.io/createrstudioprojectfromgithub/">here</a>.</p>
 <p><br></p>
 </div>
 <div id="download-cancer-incidence-dataset-from-github" class="section level2">
@@ -186,12 +189,14 @@ download.file(url, &quot;data/cancer_incidence_PK30.json&quot;)</code></pre>
 </div>
 <div id="import-and-prepare-data" class="section level2">
 <h2>Import and prepare data</h2>
-<p>First we download <code>tidyverse</code> library:</p>
-<pre class="r"><code>library(tidyverse)</code></pre>
-<p>Then we import dataset using <code>json_to_df()</code> function from “boulder” library. If you don’t have “boulder”, you can install it from github “<a href="https://github.com/tpall/boulder">tpall/boulder</a>”:</p>
+<p>First we download “tidyverse” library. We are going to need also “stringi” library for string manipulation:</p>
+<pre class="r"><code>library(tidyverse)
+library(stringi)</code></pre>
+<p>Then we import dataset using <code>json_to_df()</code> function from “boulder” library. If you don’t have “boulder”, you can install it from github “<a href="https://github.com/tpall/boulder">tpall/boulder</a>”: “boulder” package has few helper functions and was created to work specificly with Estonian Health statistics and health research database. This package is still under development and we should use it carefully.</p>
 <pre class="r"><code># devtools::install_github(&quot;tpall/boulder&quot;)
 library(boulder)
 path &lt;- &quot;data/cancer_incidence_PK30.json&quot;
+## json_to_df warns when data is not from Estonian Health Board
 incidence &lt;- json_to_df(path)</code></pre>
 <pre><code>## Data source is not Estonian Health Board, www.terviseamet.ee, but Estonian Cancer Registry.</code></pre>
 <pre class="r"><code>incidence</code></pre>
@@ -216,8 +221,8 @@ incidence &lt;- json_to_df(path)</code></pre>
 ## #   `80-84` &lt;dbl&gt;, `85 and older` &lt;dbl&gt;, label &lt;chr&gt;, source &lt;chr&gt;,
 ## #   updated &lt;chr&gt;</code></pre>
 <p>This table has data intermingled with summary data, that’s bad!</p>
-<pre><code>Year  Site  Sex
-&lt;fctr&gt;&lt;fctr&gt;          &lt;fctr&gt;
+<pre><code>Year  Site                              Sex
+&lt;fctr&gt;&lt;fctr&gt;                            &lt;fctr&gt;
 2000    All malignant neoplasms (C00-C97)   Men     &lt;- tallies
 2000    All malignant neoplasms (C00-C97)   Women     &lt;- tallies
 2000    All malignant neoplasms except skin (other) (C00-C97, except C44)   Men &lt;- tallies
@@ -228,29 +233,3312 @@ incidence &lt;- json_to_df(path)</code></pre>
 2000    ..Lip (C00) Women   
 2000    ..Tongue (C01-02)   Men 
 2000    ..Tongue (C01-02)</code></pre>
-<p>We need first to identify and remove summary data from this table. Data rows follow the summary data rows and can be identified by two dots <code>..</code> in the beginning of the variable name. We want to keep summary data ids in the table in a separate column.</p>
-<pre class="r"><code># We have two metadata columns for our dataset
-## Because these two don't chance in our table, 
-## let's keep label and source in a separate variable
+<p>Summary data contain tallies from more than one <strong>ICD10</strong> code e.g. “(C00-C97)”. Data rows follow the summary data rows and can be identified by increasing number of two dots <code>..</code> in the beginning of the variable name. We need first to <strong>identify and label summary data</strong> so that we can decide later what we do with these rows.</p>
+<p>Additionally, <strong>we have three metadata columns</strong> in dataset called “label”, “source” and “updated”. Label says what the values are, source gives us info about data origin and updated is the date of the last update. Because these two are constants in our table, we want to place them into separate objects for later use in plot annotation.</p>
+<pre class="r"><code>## keep label and source in a separate variables
 label &lt;- unique(incidence$label)
 data_source &lt;- unique(incidence$source)
-
-## Filter out summary rows and exclude table metadata
-incidence_filt &lt;- filter(incidence, !summary_var(Site)) %&gt;% 
-  select(-label, -source)</code></pre>
-<p>Data is <strong>age-specific incidence rate of malignant neoplasms per 100 000 inhabitants</strong> from Estonian Cancer Registry.</p>
-<p>Table is still in the wide format, let’s convert table into long/tidy format and filter out missing data.</p>
+updated &lt;- unique(incidence$updated)</code></pre>
+<p>Table metadata shows that values are <strong>age-specific incidence rate of malignant neoplasms per 100 000 inhabitants</strong> and originate from <strong>Estonian Cancer Registry</strong> and were last time updated in <strong>2015-06-18</strong>.</p>
+<p>We want to keep summary data ids in the table in a separate column called “is_sumvar”, it’s an logical. We use <code>summary_var()</code> helper function from “boulder” package to identify summary variables using preceding dots. To exclude table metadata constants, we use <code>select()</code> from “dplyr”.</p>
+<pre class="r"><code>## Label summary rows and exclude table metadata
+incidence &lt;- mutate(incidence, 
+                    is_sumvar = summary_var(Site)) %&gt;% 
+  select(-label, -source, -updated)
+## let's look at the result, select only two columns for viewing and filter out veeeery long varname
+select(incidence, Site, is_sumvar) %&gt;% 
+  filter(Site != &quot;All malignant neoplasms except skin (other) (C00-C97, except C44)&quot;)</code></pre>
+<pre><code>## # A tibble: 2,160 x 2
+##                                      Site is_sumvar
+##                                    &lt;fctr&gt;     &lt;lgl&gt;
+##  1      All malignant neoplasms (C00-C97)      TRUE
+##  2      All malignant neoplasms (C00-C97)      TRUE
+##  3 Lip, oral cavity and pharynx (C00-C14)      TRUE
+##  4 Lip, oral cavity and pharynx (C00-C14)      TRUE
+##  5                            ..Lip (C00)     FALSE
+##  6                            ..Lip (C00)     FALSE
+##  7                      ..Tongue (C01-02)     FALSE
+##  8                      ..Tongue (C01-02)     FALSE
+##  9    ..Gum, floor of mouth etc (C03-C06)     FALSE
+## 10    ..Gum, floor of mouth etc (C03-C06)     FALSE
+## # ... with 2,150 more rows</code></pre>
+<p>While we are on this, we can now trim those offending dots from beginning of names. We use <code>stri_trim_left()</code> from “stringi” to trim all characters from the beginning of strings <strong>until first alphabetic character</strong> (<code>?regex</code>).</p>
+<pre class="r"><code>## trim characters until first [[:alpha:]], we keep also original Site values in Site_old
+incidence &lt;- mutate(incidence, 
+                    Site_old = Site,
+                    Site = stri_trim_left(Site, &quot;[[:alpha:]]&quot;))
+## for reviewing the result we filter only short strings
+incidence %&gt;% 
+  select(Site_old, Site) %&gt;% 
+  filter(stri_length(Site_old) &lt; 20)</code></pre>
+<pre><code>## # A tibble: 660 x 2
+##               Site_old              Site
+##                 &lt;fctr&gt;             &lt;chr&gt;
+##  1         ..Lip (C00)         Lip (C00)
+##  2         ..Lip (C00)         Lip (C00)
+##  3   ..Tongue (C01-02)   Tongue (C01-02)
+##  4   ..Tongue (C01-02)   Tongue (C01-02)
+##  5 ..Nasopharynx (C11) Nasopharynx (C11)
+##  6 ..Nasopharynx (C11) Nasopharynx (C11)
+##  7  ..Oesophagus (C15)  Oesophagus (C15)
+##  8  ..Oesophagus (C15)  Oesophagus (C15)
+##  9     ..Stomach (C16)     Stomach (C16)
+## 10     ..Stomach (C16)     Stomach (C16)
+## # ... with 650 more rows</code></pre>
+<p>What the heck, let’s get those ICD10 codes into separate column. We can see</p>
+<pre class="r"><code>stri_extract_all_boundaries(incidence$Site)</code></pre>
+<pre><code>## [[1]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[2]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[3]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[4]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[5]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[6]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[7]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[8]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[9]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[10]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[11]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[12]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[13]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[14]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[15]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[16]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[17]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[18]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[19]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[20]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[21]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[22]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[23]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[24]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[25]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[26]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[27]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[28]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[29]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[30]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[31]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[32]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[33]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[34]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[35]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[36]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[37]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[38]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[39]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[40]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[41]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[42]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[43]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[44]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[45]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[46]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[47]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[48]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[49]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[50]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[51]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[52]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[53]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[54]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[55]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[56]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[57]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[58]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[59]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[60]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[61]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[62]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[63]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[64]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[65]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[66]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[67]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[68]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[69]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[70]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[71]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[72]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[73]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[74]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[75]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[76]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[77]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[78]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[79]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[80]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[81]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[82]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[83]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[84]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[85]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[86]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[87]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[88]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[89]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[90]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[91]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[92]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[93]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[94]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[95]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[96]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[97]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[98]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[99]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[100]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[101]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[102]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[103]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[104]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[105]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[106]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[107]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[108]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[109]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[110]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[111]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[112]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[113]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[114]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[115]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[116]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[117]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[118]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[119]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[120]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[121]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[122]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[123]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+## [[124]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+## [[125]]
+## [1] &quot;Leukaemia &quot; &quot;(C91-&quot;      &quot;C95)&quot;      
+## 
+## [[126]]
+## [1] &quot;Leukaemia &quot; &quot;(C91-&quot;      &quot;C95)&quot;      
+## 
+## [[127]]
+## [1] &quot;Lymphoblastic &quot; &quot;leukaemia  &quot;    &quot;(C91)&quot;         
+## 
+## [[128]]
+## [1] &quot;Lymphoblastic &quot; &quot;leukaemia  &quot;    &quot;(C91)&quot;         
+## 
+## [[129]]
+## [1] &quot;Acute &quot;         &quot;lymphoblastic &quot; &quot;leukaemia &quot;     &quot;(C91.0)&quot;       
+## 
+## [[130]]
+## [1] &quot;Acute &quot;         &quot;lymphoblastic &quot; &quot;leukaemia &quot;     &quot;(C91.0)&quot;       
+## 
+## [[131]]
+## [1] &quot;Chronic &quot;     &quot;lymphocytic &quot; &quot;leukaemia &quot;   &quot;(C91.1)&quot;     
+## 
+## [[132]]
+## [1] &quot;Chronic &quot;     &quot;lymphocytic &quot; &quot;leukaemia &quot;   &quot;(C91.1)&quot;     
+## 
+## [[133]]
+## [1] &quot;Other &quot;     &quot;lymphoid &quot;  &quot;leukaemia &quot; &quot;(C91.2-&quot;    &quot;C91.9)&quot;    
+## 
+## [[134]]
+## [1] &quot;Other &quot;     &quot;lymphoid &quot;  &quot;leukaemia &quot; &quot;(C91.2-&quot;    &quot;C91.9)&quot;    
+## 
+## [[135]]
+## [1] &quot;Myeloid &quot;   &quot;leukaemia &quot; &quot;(C92)&quot;     
+## 
+## [[136]]
+## [1] &quot;Myeloid &quot;   &quot;leukaemia &quot; &quot;(C92)&quot;     
+## 
+## [[137]]
+## [1] &quot;Acute &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.0)&quot;   
+## 
+## [[138]]
+## [1] &quot;Acute &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.0)&quot;   
+## 
+## [[139]]
+## [1] &quot;Chronic &quot;   &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.1)&quot;   
+## 
+## [[140]]
+## [1] &quot;Chronic &quot;   &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.1)&quot;   
+## 
+## [[141]]
+## [1] &quot;Other &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.2-&quot;    &quot;C92.9)&quot;    
+## 
+## [[142]]
+## [1] &quot;Other &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.2-&quot;    &quot;C92.9)&quot;    
+## 
+## [[143]]
+## [1] &quot;Other &quot;     &quot;leukaemia &quot; &quot;(C93-&quot;      &quot;C95)&quot;      
+## 
+## [[144]]
+## [1] &quot;Other &quot;     &quot;leukaemia &quot; &quot;(C93-&quot;      &quot;C95)&quot;      
+## 
+## [[145]]
+## [1] &quot;Independent &quot; &quot;multiple &quot;    &quot;sites &quot;       &quot;(C97)&quot;       
+## 
+## [[146]]
+## [1] &quot;Independent &quot; &quot;multiple &quot;    &quot;sites &quot;       &quot;(C97)&quot;       
+## 
+## [[147]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[148]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[149]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[150]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[151]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[152]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[153]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[154]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[155]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[156]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[157]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[158]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[159]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[160]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[161]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[162]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[163]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[164]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[165]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[166]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[167]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[168]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[169]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[170]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[171]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[172]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[173]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[174]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[175]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[176]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[177]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[178]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[179]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[180]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[181]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[182]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[183]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[184]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[185]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[186]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[187]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[188]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[189]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[190]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[191]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[192]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[193]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[194]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[195]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[196]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[197]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[198]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[199]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[200]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[201]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[202]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[203]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[204]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[205]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[206]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[207]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[208]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[209]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[210]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[211]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[212]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[213]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[214]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[215]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[216]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[217]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[218]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[219]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[220]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[221]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[222]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[223]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[224]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[225]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[226]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[227]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[228]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[229]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[230]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[231]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[232]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[233]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[234]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[235]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[236]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[237]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[238]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[239]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[240]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[241]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[242]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[243]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[244]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[245]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[246]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[247]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[248]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[249]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[250]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[251]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[252]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[253]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[254]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[255]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[256]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[257]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[258]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[259]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[260]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[261]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[262]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[263]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[264]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[265]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[266]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[267]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[268]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[269]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+## [[270]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+## [[271]]
+## [1] &quot;Leukaemia &quot; &quot;(C91-&quot;      &quot;C95)&quot;      
+## 
+## [[272]]
+## [1] &quot;Leukaemia &quot; &quot;(C91-&quot;      &quot;C95)&quot;      
+## 
+## [[273]]
+## [1] &quot;Lymphoblastic &quot; &quot;leukaemia  &quot;    &quot;(C91)&quot;         
+## 
+## [[274]]
+## [1] &quot;Lymphoblastic &quot; &quot;leukaemia  &quot;    &quot;(C91)&quot;         
+## 
+## [[275]]
+## [1] &quot;Acute &quot;         &quot;lymphoblastic &quot; &quot;leukaemia &quot;     &quot;(C91.0)&quot;       
+## 
+## [[276]]
+## [1] &quot;Acute &quot;         &quot;lymphoblastic &quot; &quot;leukaemia &quot;     &quot;(C91.0)&quot;       
+## 
+## [[277]]
+## [1] &quot;Chronic &quot;     &quot;lymphocytic &quot; &quot;leukaemia &quot;   &quot;(C91.1)&quot;     
+## 
+## [[278]]
+## [1] &quot;Chronic &quot;     &quot;lymphocytic &quot; &quot;leukaemia &quot;   &quot;(C91.1)&quot;     
+## 
+## [[279]]
+## [1] &quot;Other &quot;     &quot;lymphoid &quot;  &quot;leukaemia &quot; &quot;(C91.2-&quot;    &quot;C91.9)&quot;    
+## 
+## [[280]]
+## [1] &quot;Other &quot;     &quot;lymphoid &quot;  &quot;leukaemia &quot; &quot;(C91.2-&quot;    &quot;C91.9)&quot;    
+## 
+## [[281]]
+## [1] &quot;Myeloid &quot;   &quot;leukaemia &quot; &quot;(C92)&quot;     
+## 
+## [[282]]
+## [1] &quot;Myeloid &quot;   &quot;leukaemia &quot; &quot;(C92)&quot;     
+## 
+## [[283]]
+## [1] &quot;Acute &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.0)&quot;   
+## 
+## [[284]]
+## [1] &quot;Acute &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.0)&quot;   
+## 
+## [[285]]
+## [1] &quot;Chronic &quot;   &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.1)&quot;   
+## 
+## [[286]]
+## [1] &quot;Chronic &quot;   &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.1)&quot;   
+## 
+## [[287]]
+## [1] &quot;Other &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.2-&quot;    &quot;C92.9)&quot;    
+## 
+## [[288]]
+## [1] &quot;Other &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.2-&quot;    &quot;C92.9)&quot;    
+## 
+## [[289]]
+## [1] &quot;Other &quot;     &quot;leukaemia &quot; &quot;(C93-&quot;      &quot;C95)&quot;      
+## 
+## [[290]]
+## [1] &quot;Other &quot;     &quot;leukaemia &quot; &quot;(C93-&quot;      &quot;C95)&quot;      
+## 
+## [[291]]
+## [1] &quot;Independent &quot; &quot;multiple &quot;    &quot;sites &quot;       &quot;(C97)&quot;       
+## 
+## [[292]]
+## [1] &quot;Independent &quot; &quot;multiple &quot;    &quot;sites &quot;       &quot;(C97)&quot;       
+## 
+## [[293]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[294]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[295]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[296]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[297]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[298]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[299]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[300]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[301]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[302]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[303]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[304]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[305]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[306]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[307]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[308]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[309]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[310]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[311]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[312]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[313]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[314]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[315]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[316]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[317]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[318]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[319]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[320]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[321]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[322]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[323]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[324]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[325]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[326]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[327]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[328]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[329]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[330]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[331]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[332]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[333]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[334]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[335]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[336]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[337]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[338]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[339]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[340]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[341]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[342]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[343]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[344]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[345]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[346]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[347]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[348]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[349]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[350]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[351]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[352]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[353]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[354]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[355]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[356]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[357]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[358]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[359]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[360]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[361]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[362]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[363]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[364]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[365]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[366]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[367]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[368]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[369]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[370]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[371]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[372]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[373]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[374]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[375]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[376]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[377]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[378]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[379]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[380]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[381]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[382]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[383]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[384]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[385]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[386]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[387]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[388]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[389]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[390]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[391]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[392]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[393]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[394]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[395]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[396]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[397]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[398]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[399]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[400]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[401]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[402]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[403]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[404]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[405]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[406]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[407]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[408]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[409]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[410]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[411]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[412]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[413]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[414]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[415]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+## [[416]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+## [[417]]
+## [1] &quot;Leukaemia &quot; &quot;(C91-&quot;      &quot;C95)&quot;      
+## 
+## [[418]]
+## [1] &quot;Leukaemia &quot; &quot;(C91-&quot;      &quot;C95)&quot;      
+## 
+## [[419]]
+## [1] &quot;Lymphoblastic &quot; &quot;leukaemia  &quot;    &quot;(C91)&quot;         
+## 
+## [[420]]
+## [1] &quot;Lymphoblastic &quot; &quot;leukaemia  &quot;    &quot;(C91)&quot;         
+## 
+## [[421]]
+## [1] &quot;Acute &quot;         &quot;lymphoblastic &quot; &quot;leukaemia &quot;     &quot;(C91.0)&quot;       
+## 
+## [[422]]
+## [1] &quot;Acute &quot;         &quot;lymphoblastic &quot; &quot;leukaemia &quot;     &quot;(C91.0)&quot;       
+## 
+## [[423]]
+## [1] &quot;Chronic &quot;     &quot;lymphocytic &quot; &quot;leukaemia &quot;   &quot;(C91.1)&quot;     
+## 
+## [[424]]
+## [1] &quot;Chronic &quot;     &quot;lymphocytic &quot; &quot;leukaemia &quot;   &quot;(C91.1)&quot;     
+## 
+## [[425]]
+## [1] &quot;Other &quot;     &quot;lymphoid &quot;  &quot;leukaemia &quot; &quot;(C91.2-&quot;    &quot;C91.9)&quot;    
+## 
+## [[426]]
+## [1] &quot;Other &quot;     &quot;lymphoid &quot;  &quot;leukaemia &quot; &quot;(C91.2-&quot;    &quot;C91.9)&quot;    
+## 
+## [[427]]
+## [1] &quot;Myeloid &quot;   &quot;leukaemia &quot; &quot;(C92)&quot;     
+## 
+## [[428]]
+## [1] &quot;Myeloid &quot;   &quot;leukaemia &quot; &quot;(C92)&quot;     
+## 
+## [[429]]
+## [1] &quot;Acute &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.0)&quot;   
+## 
+## [[430]]
+## [1] &quot;Acute &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.0)&quot;   
+## 
+## [[431]]
+## [1] &quot;Chronic &quot;   &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.1)&quot;   
+## 
+## [[432]]
+## [1] &quot;Chronic &quot;   &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.1)&quot;   
+## 
+## [[433]]
+## [1] &quot;Other &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.2-&quot;    &quot;C92.9)&quot;    
+## 
+## [[434]]
+## [1] &quot;Other &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.2-&quot;    &quot;C92.9)&quot;    
+## 
+## [[435]]
+## [1] &quot;Other &quot;     &quot;leukaemia &quot; &quot;(C93-&quot;      &quot;C95)&quot;      
+## 
+## [[436]]
+## [1] &quot;Other &quot;     &quot;leukaemia &quot; &quot;(C93-&quot;      &quot;C95)&quot;      
+## 
+## [[437]]
+## [1] &quot;Independent &quot; &quot;multiple &quot;    &quot;sites &quot;       &quot;(C97)&quot;       
+## 
+## [[438]]
+## [1] &quot;Independent &quot; &quot;multiple &quot;    &quot;sites &quot;       &quot;(C97)&quot;       
+## 
+## [[439]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[440]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[441]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[442]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[443]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[444]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[445]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[446]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[447]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[448]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[449]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[450]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[451]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[452]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[453]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[454]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[455]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[456]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[457]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[458]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[459]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[460]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[461]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[462]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[463]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[464]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[465]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[466]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[467]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[468]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[469]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[470]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[471]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[472]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[473]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[474]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[475]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[476]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[477]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[478]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[479]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[480]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[481]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[482]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[483]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[484]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[485]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[486]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[487]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[488]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[489]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[490]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[491]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[492]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[493]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[494]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[495]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[496]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[497]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[498]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[499]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[500]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[501]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[502]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[503]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[504]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[505]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[506]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[507]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[508]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[509]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[510]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[511]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[512]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[513]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[514]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[515]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[516]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[517]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[518]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[519]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[520]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[521]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[522]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[523]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[524]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[525]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[526]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[527]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[528]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[529]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[530]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[531]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[532]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[533]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[534]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[535]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[536]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[537]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[538]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[539]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[540]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[541]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[542]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[543]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[544]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[545]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[546]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[547]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[548]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[549]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[550]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[551]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[552]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[553]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[554]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[555]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[556]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[557]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[558]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[559]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[560]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[561]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+## [[562]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+## [[563]]
+## [1] &quot;Leukaemia &quot; &quot;(C91-&quot;      &quot;C95)&quot;      
+## 
+## [[564]]
+## [1] &quot;Leukaemia &quot; &quot;(C91-&quot;      &quot;C95)&quot;      
+## 
+## [[565]]
+## [1] &quot;Lymphoblastic &quot; &quot;leukaemia  &quot;    &quot;(C91)&quot;         
+## 
+## [[566]]
+## [1] &quot;Lymphoblastic &quot; &quot;leukaemia  &quot;    &quot;(C91)&quot;         
+## 
+## [[567]]
+## [1] &quot;Acute &quot;         &quot;lymphoblastic &quot; &quot;leukaemia &quot;     &quot;(C91.0)&quot;       
+## 
+## [[568]]
+## [1] &quot;Acute &quot;         &quot;lymphoblastic &quot; &quot;leukaemia &quot;     &quot;(C91.0)&quot;       
+## 
+## [[569]]
+## [1] &quot;Chronic &quot;     &quot;lymphocytic &quot; &quot;leukaemia &quot;   &quot;(C91.1)&quot;     
+## 
+## [[570]]
+## [1] &quot;Chronic &quot;     &quot;lymphocytic &quot; &quot;leukaemia &quot;   &quot;(C91.1)&quot;     
+## 
+## [[571]]
+## [1] &quot;Other &quot;     &quot;lymphoid &quot;  &quot;leukaemia &quot; &quot;(C91.2-&quot;    &quot;C91.9)&quot;    
+## 
+## [[572]]
+## [1] &quot;Other &quot;     &quot;lymphoid &quot;  &quot;leukaemia &quot; &quot;(C91.2-&quot;    &quot;C91.9)&quot;    
+## 
+## [[573]]
+## [1] &quot;Myeloid &quot;   &quot;leukaemia &quot; &quot;(C92)&quot;     
+## 
+## [[574]]
+## [1] &quot;Myeloid &quot;   &quot;leukaemia &quot; &quot;(C92)&quot;     
+## 
+## [[575]]
+## [1] &quot;Acute &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.0)&quot;   
+## 
+## [[576]]
+## [1] &quot;Acute &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.0)&quot;   
+## 
+## [[577]]
+## [1] &quot;Chronic &quot;   &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.1)&quot;   
+## 
+## [[578]]
+## [1] &quot;Chronic &quot;   &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.1)&quot;   
+## 
+## [[579]]
+## [1] &quot;Other &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.2-&quot;    &quot;C92.9)&quot;    
+## 
+## [[580]]
+## [1] &quot;Other &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.2-&quot;    &quot;C92.9)&quot;    
+## 
+## [[581]]
+## [1] &quot;Other &quot;     &quot;leukaemia &quot; &quot;(C93-&quot;      &quot;C95)&quot;      
+## 
+## [[582]]
+## [1] &quot;Other &quot;     &quot;leukaemia &quot; &quot;(C93-&quot;      &quot;C95)&quot;      
+## 
+## [[583]]
+## [1] &quot;Independent &quot; &quot;multiple &quot;    &quot;sites &quot;       &quot;(C97)&quot;       
+## 
+## [[584]]
+## [1] &quot;Independent &quot; &quot;multiple &quot;    &quot;sites &quot;       &quot;(C97)&quot;       
+## 
+## [[585]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[586]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[587]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[588]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[589]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[590]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[591]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[592]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[593]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[594]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[595]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[596]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[597]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[598]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[599]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[600]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[601]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[602]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[603]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[604]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[605]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[606]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[607]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[608]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[609]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[610]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[611]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[612]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[613]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[614]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[615]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[616]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[617]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[618]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[619]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[620]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[621]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[622]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[623]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[624]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[625]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[626]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[627]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[628]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[629]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[630]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[631]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[632]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[633]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[634]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[635]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[636]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[637]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[638]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[639]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[640]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[641]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[642]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[643]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[644]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[645]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[646]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[647]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[648]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[649]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[650]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[651]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[652]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[653]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[654]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[655]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[656]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[657]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[658]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[659]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[660]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[661]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[662]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[663]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[664]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[665]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[666]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[667]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[668]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[669]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[670]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[671]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[672]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[673]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[674]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[675]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[676]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[677]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[678]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[679]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[680]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[681]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[682]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[683]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[684]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[685]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[686]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[687]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[688]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[689]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[690]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[691]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[692]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[693]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[694]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[695]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[696]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[697]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[698]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[699]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[700]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[701]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[702]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[703]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[704]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[705]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[706]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[707]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+## [[708]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+## [[709]]
+## [1] &quot;Leukaemia &quot; &quot;(C91-&quot;      &quot;C95)&quot;      
+## 
+## [[710]]
+## [1] &quot;Leukaemia &quot; &quot;(C91-&quot;      &quot;C95)&quot;      
+## 
+## [[711]]
+## [1] &quot;Lymphoblastic &quot; &quot;leukaemia  &quot;    &quot;(C91)&quot;         
+## 
+## [[712]]
+## [1] &quot;Lymphoblastic &quot; &quot;leukaemia  &quot;    &quot;(C91)&quot;         
+## 
+## [[713]]
+## [1] &quot;Acute &quot;         &quot;lymphoblastic &quot; &quot;leukaemia &quot;     &quot;(C91.0)&quot;       
+## 
+## [[714]]
+## [1] &quot;Acute &quot;         &quot;lymphoblastic &quot; &quot;leukaemia &quot;     &quot;(C91.0)&quot;       
+## 
+## [[715]]
+## [1] &quot;Chronic &quot;     &quot;lymphocytic &quot; &quot;leukaemia &quot;   &quot;(C91.1)&quot;     
+## 
+## [[716]]
+## [1] &quot;Chronic &quot;     &quot;lymphocytic &quot; &quot;leukaemia &quot;   &quot;(C91.1)&quot;     
+## 
+## [[717]]
+## [1] &quot;Other &quot;     &quot;lymphoid &quot;  &quot;leukaemia &quot; &quot;(C91.2-&quot;    &quot;C91.9)&quot;    
+## 
+## [[718]]
+## [1] &quot;Other &quot;     &quot;lymphoid &quot;  &quot;leukaemia &quot; &quot;(C91.2-&quot;    &quot;C91.9)&quot;    
+## 
+## [[719]]
+## [1] &quot;Myeloid &quot;   &quot;leukaemia &quot; &quot;(C92)&quot;     
+## 
+## [[720]]
+## [1] &quot;Myeloid &quot;   &quot;leukaemia &quot; &quot;(C92)&quot;     
+## 
+## [[721]]
+## [1] &quot;Acute &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.0)&quot;   
+## 
+## [[722]]
+## [1] &quot;Acute &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.0)&quot;   
+## 
+## [[723]]
+## [1] &quot;Chronic &quot;   &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.1)&quot;   
+## 
+## [[724]]
+## [1] &quot;Chronic &quot;   &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.1)&quot;   
+## 
+## [[725]]
+## [1] &quot;Other &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.2-&quot;    &quot;C92.9)&quot;    
+## 
+## [[726]]
+## [1] &quot;Other &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.2-&quot;    &quot;C92.9)&quot;    
+## 
+## [[727]]
+## [1] &quot;Other &quot;     &quot;leukaemia &quot; &quot;(C93-&quot;      &quot;C95)&quot;      
+## 
+## [[728]]
+## [1] &quot;Other &quot;     &quot;leukaemia &quot; &quot;(C93-&quot;      &quot;C95)&quot;      
+## 
+## [[729]]
+## [1] &quot;Independent &quot; &quot;multiple &quot;    &quot;sites &quot;       &quot;(C97)&quot;       
+## 
+## [[730]]
+## [1] &quot;Independent &quot; &quot;multiple &quot;    &quot;sites &quot;       &quot;(C97)&quot;       
+## 
+## [[731]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[732]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[733]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[734]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[735]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[736]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[737]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[738]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[739]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[740]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[741]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[742]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[743]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[744]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[745]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[746]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[747]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[748]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[749]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[750]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[751]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[752]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[753]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[754]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[755]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[756]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[757]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[758]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[759]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[760]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[761]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[762]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[763]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[764]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[765]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[766]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[767]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[768]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[769]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[770]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[771]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[772]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[773]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[774]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[775]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[776]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[777]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[778]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[779]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[780]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[781]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[782]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[783]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[784]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[785]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[786]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[787]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[788]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[789]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[790]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[791]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[792]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[793]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[794]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[795]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[796]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[797]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[798]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[799]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[800]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[801]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[802]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[803]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[804]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[805]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[806]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[807]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[808]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[809]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[810]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[811]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[812]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[813]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[814]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[815]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[816]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[817]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[818]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[819]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[820]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[821]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[822]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[823]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[824]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[825]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[826]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[827]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[828]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[829]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[830]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[831]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[832]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[833]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[834]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[835]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[836]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[837]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[838]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[839]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[840]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[841]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[842]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[843]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[844]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[845]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[846]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[847]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[848]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[849]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[850]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[851]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[852]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[853]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+## [[854]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+## [[855]]
+## [1] &quot;Leukaemia &quot; &quot;(C91-&quot;      &quot;C95)&quot;      
+## 
+## [[856]]
+## [1] &quot;Leukaemia &quot; &quot;(C91-&quot;      &quot;C95)&quot;      
+## 
+## [[857]]
+## [1] &quot;Lymphoblastic &quot; &quot;leukaemia  &quot;    &quot;(C91)&quot;         
+## 
+## [[858]]
+## [1] &quot;Lymphoblastic &quot; &quot;leukaemia  &quot;    &quot;(C91)&quot;         
+## 
+## [[859]]
+## [1] &quot;Acute &quot;         &quot;lymphoblastic &quot; &quot;leukaemia &quot;     &quot;(C91.0)&quot;       
+## 
+## [[860]]
+## [1] &quot;Acute &quot;         &quot;lymphoblastic &quot; &quot;leukaemia &quot;     &quot;(C91.0)&quot;       
+## 
+## [[861]]
+## [1] &quot;Chronic &quot;     &quot;lymphocytic &quot; &quot;leukaemia &quot;   &quot;(C91.1)&quot;     
+## 
+## [[862]]
+## [1] &quot;Chronic &quot;     &quot;lymphocytic &quot; &quot;leukaemia &quot;   &quot;(C91.1)&quot;     
+## 
+## [[863]]
+## [1] &quot;Other &quot;     &quot;lymphoid &quot;  &quot;leukaemia &quot; &quot;(C91.2-&quot;    &quot;C91.9)&quot;    
+## 
+## [[864]]
+## [1] &quot;Other &quot;     &quot;lymphoid &quot;  &quot;leukaemia &quot; &quot;(C91.2-&quot;    &quot;C91.9)&quot;    
+## 
+## [[865]]
+## [1] &quot;Myeloid &quot;   &quot;leukaemia &quot; &quot;(C92)&quot;     
+## 
+## [[866]]
+## [1] &quot;Myeloid &quot;   &quot;leukaemia &quot; &quot;(C92)&quot;     
+## 
+## [[867]]
+## [1] &quot;Acute &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.0)&quot;   
+## 
+## [[868]]
+## [1] &quot;Acute &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.0)&quot;   
+## 
+## [[869]]
+## [1] &quot;Chronic &quot;   &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.1)&quot;   
+## 
+## [[870]]
+## [1] &quot;Chronic &quot;   &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.1)&quot;   
+## 
+## [[871]]
+## [1] &quot;Other &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.2-&quot;    &quot;C92.9)&quot;    
+## 
+## [[872]]
+## [1] &quot;Other &quot;     &quot;myeloid &quot;   &quot;leukaemia &quot; &quot;(C92.2-&quot;    &quot;C92.9)&quot;    
+## 
+## [[873]]
+## [1] &quot;Other &quot;     &quot;leukaemia &quot; &quot;(C93-&quot;      &quot;C95)&quot;      
+## 
+## [[874]]
+## [1] &quot;Other &quot;     &quot;leukaemia &quot; &quot;(C93-&quot;      &quot;C95)&quot;      
+## 
+## [[875]]
+## [1] &quot;Independent &quot; &quot;multiple &quot;    &quot;sites &quot;       &quot;(C97)&quot;       
+## 
+## [[876]]
+## [1] &quot;Independent &quot; &quot;multiple &quot;    &quot;sites &quot;       &quot;(C97)&quot;       
+## 
+## [[877]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[878]]
+## [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;(C00-&quot;      &quot;C97)&quot;      
+## 
+## [[879]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[880]]
+##  [1] &quot;All &quot;       &quot;malignant &quot; &quot;neoplasms &quot; &quot;except &quot;    &quot;skin &quot;     
+##  [6] &quot;(other) &quot;   &quot;(C00-&quot;      &quot;C97, &quot;      &quot;except &quot;    &quot;C44)&quot;      
+## 
+## [[881]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[882]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(C00-&quot;   
+## [7] &quot;C14)&quot;    
+## 
+## [[883]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[884]]
+## [1] &quot;Lip &quot;  &quot;(C00)&quot;
+## 
+## [[885]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[886]]
+## [1] &quot;Tongue &quot;  &quot;(C01-02)&quot;
+## 
+## [[887]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[888]]
+## [1] &quot;Gum, &quot;  &quot;floor &quot; &quot;of &quot;    &quot;mouth &quot; &quot;etc &quot;   &quot;(C03-&quot;  &quot;C06)&quot;  
+## 
+## [[889]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[890]]
+## [1] &quot;Major &quot;    &quot;salivary &quot; &quot;glands &quot;   &quot;(C07-&quot;     &quot;C08)&quot;     
+## 
+## [[891]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[892]]
+## [1] &quot;Tonsil, &quot;    &quot;oropharynx &quot; &quot;(C09-&quot;       &quot;C10)&quot;       
+## 
+## [[893]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[894]]
+## [1] &quot;Nasopharynx &quot; &quot;(C11)&quot;       
+## 
+## [[895]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[896]]
+## [1] &quot;Piriform &quot;    &quot;sinus, &quot;      &quot;hypopharynx &quot; &quot;(C12-&quot;       
+## [5] &quot;C13)&quot;        
+## 
+## [[897]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[898]]
+## [1] &quot;Lip, &quot;    &quot;oral &quot;    &quot;cavity &quot;  &quot;and &quot;     &quot;pharynx &quot; &quot;(other) &quot;
+## [7] &quot;(C14)&quot;   
+## 
+## [[899]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[900]]
+## [1] &quot;Digestive &quot; &quot;organs &quot;    &quot;(C15-&quot;      &quot;C26)&quot;      
+## 
+## [[901]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[902]]
+## [1] &quot;Oesophagus &quot; &quot;(C15)&quot;      
+## 
+## [[903]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[904]]
+## [1] &quot;Stomach &quot; &quot;(C16)&quot;   
+## 
+## [[905]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[906]]
+## [1] &quot;Small &quot;     &quot;intestine &quot; &quot;(C17)&quot;     
+## 
+## [[907]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[908]]
+## [1] &quot;Colon &quot; &quot;(C18)&quot; 
+## 
+## [[909]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[910]]
+## [1] &quot;Rectum &quot; &quot;and &quot;    &quot;others &quot; &quot;(C19-&quot;   &quot;C21)&quot;   
+## 
+## [[911]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[912]]
+## [1] &quot;Liver &quot;  &quot;and &quot;    &quot;others &quot; &quot;(C22)&quot;  
+## 
+## [[913]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[914]]
+## [1] &quot;Gallbladder &quot; &quot;and &quot;         &quot;others &quot;      &quot;(C23-&quot;       
+## [5] &quot;C24)&quot;        
+## 
+## [[915]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[916]]
+## [1] &quot;Pancreas &quot; &quot;(C25)&quot;    
+## 
+## [[917]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[918]]
+## [1] &quot;Other &quot;     &quot;digestive &quot; &quot;organs &quot;    &quot;(C26)&quot;     
+## 
+## [[919]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[920]]
+## [1] &quot;Respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot; &quot;organs &quot;       
+## [5] &quot;(C30-&quot;          &quot;C39)&quot;          
+## 
+## [[921]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[922]]
+## [1] &quot;Nasal &quot;     &quot;cavity, &quot;   &quot;ear, &quot;      &quot;accessory &quot; &quot;sinuses &quot;  
+## [6] &quot;(C30-&quot;      &quot;C31)&quot;      
+## 
+## [[923]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[924]]
+## [1] &quot;Larynx &quot; &quot;(C32)&quot;  
+## 
+## [[925]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[926]]
+## [1] &quot;Trachea, &quot;  &quot;bronchus, &quot; &quot;lung &quot;      &quot;(C33-&quot;      &quot;C34)&quot;      
+## 
+## [[927]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[928]]
+## [1] &quot;Thymus, &quot;      &quot;heart, &quot;       &quot;mediastinum, &quot; &quot;pleura &quot;      
+## [5] &quot;(C37-&quot;         &quot;C38)&quot;         
+## 
+## [[929]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[930]]
+## [1] &quot;Other &quot;         &quot;respiratory &quot;   &quot;and &quot;           &quot;intrathoracic &quot;
+## [5] &quot;organs &quot;        &quot;(C39)&quot;         
+## 
+## [[931]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[932]]
+## [1] &quot;Bone &quot;      &quot;and &quot;       &quot;articular &quot; &quot;cartilage &quot; &quot;(C40-&quot;     
+## [6] &quot;C41)&quot;      
+## 
+## [[933]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[934]]
+## [1] &quot;Skin &quot;       &quot;(melanoma) &quot; &quot;(C43)&quot;      
+## 
+## [[935]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[936]]
+## [1] &quot;Skin &quot;     &quot;(others) &quot; &quot;(C44)&quot;    
+## 
+## [[937]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[938]]
+## [1] &quot;Mesothelioma &quot; &quot;and &quot;          &quot;soft &quot;         &quot;tissue &quot;      
+## [5] &quot;(C45-&quot;         &quot;C49)&quot;         
+## 
+## [[939]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[940]]
+## [1] &quot;Breast &quot; &quot;(C50)&quot;  
+## 
+## [[941]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[942]]
+## [1] &quot;Female &quot;  &quot;genital &quot; &quot;organs &quot;  &quot;(C51-&quot;    &quot;C58)&quot;    
+## 
+## [[943]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[944]]
+## [1] &quot;Vulva, &quot; &quot;vagina &quot; &quot;(C51-&quot;   &quot;C52)&quot;   
+## 
+## [[945]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[946]]
+## [1] &quot;Cervix &quot; &quot;uteri &quot;  &quot;(C53)&quot;  
+## 
+## [[947]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[948]]
+## [1] &quot;Corpus &quot; &quot;uteri &quot;  &quot;(C54)&quot;  
+## 
+## [[949]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[950]]
+## [1] &quot;Uterus &quot;       &quot;(part &quot;        &quot;unspecified) &quot; &quot;(C55)&quot;        
+## 
+## [[951]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[952]]
+## [1] &quot;Ovary &quot; &quot;(C56)&quot; 
+## 
+## [[953]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[954]]
+## [1] &quot;Other &quot;       &quot;unspecified &quot; &quot;female &quot;      &quot;genital &quot;    
+## [5] &quot;organs &quot;      &quot;(C57)&quot;       
+## 
+## [[955]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[956]]
+## [1] &quot;Placenta &quot; &quot;(C58)&quot;    
+## 
+## [[957]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[958]]
+## [1] &quot;Male  &quot;   &quot;genital &quot; &quot;organs &quot;  &quot;(C60-&quot;    &quot;C63)&quot;    
+## 
+## [[959]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[960]]
+## [1] &quot;Penis &quot; &quot;(C60)&quot; 
+## 
+## [[961]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[962]]
+## [1] &quot;Prostate &quot; &quot;(C61)&quot;    
+## 
+## [[963]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[964]]
+## [1] &quot;Testis &quot; &quot;(C62)&quot;  
+## 
+## [[965]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[966]]
+## [1] &quot;Other &quot;   &quot;male &quot;    &quot;genital &quot; &quot;organs &quot;  &quot;(C63)&quot;   
+## 
+## [[967]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[968]]
+## [1] &quot;Urinary &quot; &quot;tract &quot;   &quot;(C64-&quot;    &quot;C68)&quot;    
+## 
+## [[969]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[970]]
+## [1] &quot;Kidney, &quot; &quot;renal &quot;   &quot;pelvis &quot;  &quot;(C64-&quot;    &quot;C65)&quot;    
+## 
+## [[971]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[972]]
+## [1] &quot;Ureter &quot; &quot;(C66)&quot;  
+## 
+## [[973]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[974]]
+## [1] &quot;Bladder &quot; &quot;(C67)&quot;   
+## 
+## [[975]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[976]]
+## [1] &quot;Other &quot;   &quot;urinary &quot; &quot;organs &quot;  &quot;(C68)&quot;   
+## 
+## [[977]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[978]]
+## [1] &quot;Eye &quot;  &quot;(C69)&quot;
+## 
+## [[979]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[980]]
+## [1] &quot;Brain &quot;   &quot;and &quot;     &quot;central &quot; &quot;nervous &quot; &quot;system &quot;  &quot;(C70-&quot;   
+## [7] &quot;C72)&quot;    
+## 
+## [[981]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[982]]
+## [1] &quot;Meninges &quot; &quot;(C70)&quot;    
+## 
+## [[983]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[984]]
+## [1] &quot;Brain &quot; &quot;(C71)&quot; 
+## 
+## [[985]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[986]]
+## [1] &quot;Other &quot;   &quot;parts &quot;   &quot;of &quot;      &quot;nervous &quot; &quot;system &quot;  &quot;(C73)&quot;   
+## 
+## [[987]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[988]]
+## [1] &quot;Adrenal &quot; &quot;gland &quot;   &quot;(C74)&quot;   
+## 
+## [[989]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[990]]
+## [1] &quot;Other &quot;     &quot;endocrine &quot; &quot;glands &quot;    &quot;(C74-&quot;      &quot;C75)&quot;      
+## 
+## [[991]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[992]]
+## [1] &quot;Ill-&quot;         &quot;defined &quot;     &quot;or &quot;          &quot;unspecified &quot;
+## [5] &quot;sites &quot;       &quot;(C76-&quot;        &quot;C80)&quot;        
+## 
+## [[993]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[994]]
+## [1] &quot;Hodgkins &quot; &quot;disease &quot;  &quot;(C81)&quot;    
+## 
+## [[995]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[996]]
+## [1] &quot;Non-&quot;       &quot;Hodgkin's &quot; &quot;lymphoma &quot;  &quot;(C82-&quot;      &quot;C85/96)&quot;   
+## 
+## [[997]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[998]]
+## [1] &quot;Immunoproliferative &quot; &quot;diseases &quot;            &quot;(C88)&quot;               
+## 
+## [[999]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+## [[1000]]
+## [1] &quot;Multiple &quot; &quot;myeloma &quot;  &quot;(C90)&quot;    
+## 
+##  [ reached getOption(&quot;max.print&quot;) -- omitted 1190 entries ]</code></pre>
+<blockquote>
+<p>Table is in the wide format, we want to convert it into long/tidy format and filter out missing data.</p>
+</blockquote>
+<p><strong>Reshape data</strong>. Values are in the age group columns. We try to reshape table such as the age groups go into “age” column and values will be in the column called “incidence”. We use <code>gather()</code> from “tidyr” library to bring age group values into one column and incidence values into the other. Here we also need to supply the names of the value columns, otherwise <code>gather()</code> will put all categorical variables into the key column and all numeric values into value column.</p>
+<pre class="r"><code>## Let's look what happens when we run gather on our data
+gather(incidence)</code></pre>
+<pre><code>## Warning: attributes are not identical across measure variables;
+## they will be dropped</code></pre>
+<pre><code>## # A tibble: 50,370 x 2
+##      key value
+##    &lt;chr&gt; &lt;chr&gt;
+##  1  Year  2000
+##  2  Year  2000
+##  3  Year  2000
+##  4  Year  2000
+##  5  Year  2000
+##  6  Year  2000
+##  7  Year  2000
+##  8  Year  2000
+##  9  Year  2000
+## 10  Year  2000
+## # ... with 50,360 more rows</code></pre>
+<p>Not what we want!</p>
+<blockquote>
+<p>It might not be always clear what <code>gather()</code> result will look like, you might need several iterations to get expected result.</p>
+</blockquote>
+<p><strong>Select columns cleverly</strong>. Incidence data is in the age groups columns are labelled from <code>0-4</code> to <code>85 and older</code>, we need to supply the names of these columns to <code>gather()</code>.</p>
+<p>We can do this by supplying the names of all 18 age group columns to function (risking with typos and we need to backquote these names because of dash characters) or we can <strong>do this in the smart way</strong>.</p>
+<p>“dplyr” has <strong>select helper functions</strong> <code>?select_helpers</code> to select columns based on patterns in their names.</p>
+<p>One such function is <code>matches()</code>: matches a regular expression (<code>?regex</code>). Here we need to match columns with numbers in their names. Regular expression matching zero or more numbers is <code>&quot;[[:digit:]]+&quot;</code>.</p>
+<pre class="r"><code>colnames(incidence)</code></pre>
+<pre><code>##  [1] &quot;Year&quot;         &quot;Site&quot;         &quot;Sex&quot;          &quot;0-4&quot;         
+##  [5] &quot;5-9&quot;          &quot;10-14&quot;        &quot;15-19&quot;        &quot;20-24&quot;       
+##  [9] &quot;25-29&quot;        &quot;30-34&quot;        &quot;35-39&quot;        &quot;40-44&quot;       
+## [13] &quot;45-49&quot;        &quot;50-54&quot;        &quot;55-59&quot;        &quot;60-64&quot;       
+## [17] &quot;65-69&quot;        &quot;70-74&quot;        &quot;75-79&quot;        &quot;80-84&quot;       
+## [21] &quot;85 and older&quot; &quot;is_sumvar&quot;    &quot;Site_old&quot;</code></pre>
+<pre class="r"><code>colnames(incidence) %&gt;% matches(&quot;[[:digit:]]+&quot;, vars = .)</code></pre>
+<pre><code>##  [1]  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21</code></pre>
+<p>Here we use <code>gather()</code> to collect age group columns selected by <code>matches(&quot;[[:digit:]]+&quot;)</code> into columns “age” and “incidence”.</p>
 <pre class="r"><code>## Values are in the age group columns
-incidence_long &lt;- gather(incidence_filt, &quot;age&quot;, &quot;incidence&quot;, matches(&quot;^[[:digit:]]+&quot;))
-
-## Filter out missing data,
-incidence_long &lt;- incidence_long %&gt;% filter(complete.cases(.)) %&gt;% as_data_frame()</code></pre>
-<p>Let’s have a look at the dataset structure:</p>
-<pre class="r"><code>colnames(incidence_long)</code></pre>
-<pre><code>## [1] &quot;Year&quot;      &quot;Site&quot;      &quot;Sex&quot;       &quot;updated&quot;   &quot;age&quot;       &quot;incidence&quot;</code></pre>
+incidence_long &lt;- gather(data = incidence, 
+                         key = &quot;age&quot;, 
+                         value = &quot;incidence&quot;, 
+                         matches(&quot;[[:digit:]]+&quot;))</code></pre>
+<p>Now we have each value on separate row and can filter out missing values. Currently missing values are expicitly labeled with NA-s. Function <code>complete.cases()</code> gives logical vector indicating rows with no missing values (no NA-s). Based on this logical vector, <code>filter()</code> then keeps only <code>TRUE</code> rows.</p>
+<pre class="r"><code>## Filter out missing data,
+incidence_long &lt;- incidence_long %&gt;% 
+  filter(complete.cases(.))
+## above is same as:
+## filter(incidence_long, complete.cases(incidence_long))</code></pre>
+<p>Before filtering missing values table had 39420 rows and after 39420. <strong>Wow, looks that we don’t have NA-s in our table!</strong></p>
 </div>
-<div id="bibliograafia" class="section level2 unnumbered">
-<h2>Bibliograafia</h2>
+<div id="references" class="section level2 unnumbered">
+<h2>References</h2>
 <div id="refs" class="references">
 <div id="ref-wickham2017r">
 <p>Wickham, Hadley, and Garrett Grolemund. 2017. “R for Data Science.” O’Reilly Media. http://r4ds.had.co.nz.</p>

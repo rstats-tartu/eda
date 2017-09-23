@@ -57,6 +57,10 @@ By using cancer incidence data from Estonian Cancer Registry we want to understa
 
 <br>
 
+
+> However, when doing data analysis 80% of time will be spent on data munging where you also become familiar with your dataset. So it's time well spent.
+
+
 ## Cancer incidence data from Estonian cancer registry
 Estonian cancer registry data is available via [Health statistics and health research database]( http://pxweb.tai.ee/PXWeb2015/pxweb/en/02Haigestumus/02Haigestumus__04Pahaloomulised%20kasvajad/?tablelist=true&rxid=279523e2-1ea1-4a02-920b-f85bb19a908d).
 We are using cancer incidence dataset from table "PK30: Age-specific incidence rate of malignant neoplasms per 100 000 inhabitants by site and sex".
@@ -71,12 +75,15 @@ knitr::include_graphics("img/pk30-page.png")
 
 <br>
 
-For your convenience, we have downloaded this dataset into ["rstats-tart/datasets"](https://github.com/rstats-tartu/datasets) GitHub repo. 
+For your convenience, we have downloaded this dataset into ["rstats-tartu/datasets"](https://github.com/rstats-tartu/datasets) GitHub repo. 
 
 <br>
 
 ## Create RStudio project 
-Create RStudio project from GitHub repo. First create GitHub repo and call it `eda_demo`. Further instructions can be found [here](https://rstats-tartu.github.io/createrstudioprojectfromgithub/).
+Create RStudio project from GitHub repo. 
+*First*, create GitHub repo and call it `eda_demo`. 
+*Second*, clone this repo into RStudio project. 
+Detailed instructions can be found [here](https://rstats-tartu.github.io/createrstudioprojectfromgithub/).
 
 <br>
 
@@ -93,27 +100,31 @@ download.file(url, "data/cancer_incidence_PK30.json")
 
 ## Import and prepare data
 
-First we download `tidyverse` library:
+First we download "tidyverse" library. We are going to need also "stringi" library for string manipulation:
 ```{r, message=FALSE}
 library(tidyverse)
+library(stringi)
 ```
 
 
 Then we import dataset using `json_to_df()` function from "boulder" library. 
 If you don't have "boulder", you can install it from github "[tpall/boulder](https://github.com/tpall/boulder)":
+"boulder" package has few helper functions and was created to work specificly with Estonian Health statistics and health research database.
+This package is still under development and we should use it carefully.
 
 ```{r}
 # devtools::install_github("tpall/boulder")
 library(boulder)
 path <- "data/cancer_incidence_PK30.json"
+## json_to_df warns when data is not from Estonian Health Board
 incidence <- json_to_df(path)
 incidence
 ```
 
 This table has data intermingled with summary data, that's bad! 
 ```
-Year  Site  Sex
-<fctr><fctr>          <fctr>
+Year  Site                              Sex
+<fctr><fctr>                            <fctr>
 2000	All malignant neoplasms (C00-C97)	Men	    <- tallies
 2000	All malignant neoplasms (C00-C97)	Women	  <- tallies
 2000	All malignant neoplasms except skin (other) (C00-C97, except C44)	Men	<- tallies
@@ -125,38 +136,124 @@ Year  Site  Sex
 2000	..Tongue (C01-02)	Men	
 2000	..Tongue (C01-02)
 ```
-We need first to identify and remove summary data from this table. 
-Data rows follow the summary data rows and can be identified by two dots `..` in the beginning of the variable name. 
-We want to keep summary data ids in the table in a separate column.
+
+Summary data contain tallies from more than one **ICD10** code e.g. "(C00-C97)".
+Data rows follow the summary data rows and can be identified by increasing number of two dots `..` in the beginning of the variable name. 
+We need first to **identify and label summary data** so that we can decide later what we do with these rows. 
+
+
+Additionally, **we have three metadata columns** in dataset called "label", "source" and "updated".
+Label says what the values are, source gives us info about data origin and updated is the date of the last update.
+Because these two are constants in our table, we want to place them into separate objects for later use in plot annotation.
 ```{r}
-# We have two metadata columns for our dataset
-## Because these two don't chance in our table, 
-## let's keep label and source in a separate variable
+## keep label and source in a separate variables
 label <- unique(incidence$label)
 data_source <- unique(incidence$source)
-
-## Filter out summary rows and exclude table metadata
-incidence_filt <- filter(incidence, !summary_var(Site)) %>% 
-  select(-label, -source)
+updated <- unique(incidence$updated)
 ```
 
-Data is **`r tolower(label)`** from `r data_source`. 
+Table metadata shows that values are **`r tolower(label)`** and originate from **`r data_source`** and were last time updated in **`r format.Date(updated)`**.
+
+We want to keep summary data ids in the table in a separate column called "is_sumvar", it's an logical.
+We use `summary_var()` helper function from "boulder" package to identify summary variables using preceding dots.
+To exclude table metadata constants, we use `select()` from "dplyr". 
+```{r}
+## Label summary rows and exclude table metadata
+incidence <- mutate(incidence, 
+                    is_sumvar = summary_var(Site)) %>% 
+  select(-label, -source, -updated)
+## let's look at the result, select only two columns for viewing and filter out veeeery long varname
+select(incidence, Site, is_sumvar) %>% 
+  filter(Site != "All malignant neoplasms except skin (other) (C00-C97, except C44)")
+```
 
 
-Table is still in the wide format, let's convert table into long/tidy format and filter out missing data.
+While we are on this, we can now trim those offending dots from beginning of names. We use `stri_trim_left()` from "stringi" to trim all characters from the beginning of strings **until first alphabetic character** (`?regex`).
+```{r}
+## trim characters until first [[:alpha:]], we keep also original Site values in Site_old
+incidence <- mutate(incidence, 
+                    Site_old = Site,
+                    Site = stri_trim_left(Site, "[[:alpha:]]"))
+## for reviewing the result we filter only short strings
+incidence %>% 
+  select(Site_old, Site) %>% 
+  filter(stri_length(Site_old) < 20)
+```
+
+What the heck, let's get those ICD10 codes into separate column. 
+We can see
+```{r}
+stri_extract_all_boundaries(incidence$Site)
+```
+
+>Table is in the wide format, we want to convert it into long/tidy format and filter out missing data.
+
+
+**Reshape data**.
+Values are in the age group columns.
+We try to reshape table such as the age groups go into "age" column and values will be in the column called "incidence".
+We use `gather()` from "tidyr" library to bring age group values into one column and incidence values into the other.
+Here we also need to supply the names of the value columns, otherwise `gather()` will put all categorical variables into the key column and all numeric values into value column.
+
+```{r}
+## Let's look what happens when we run gather on our data
+gather(incidence)
+```
+Not what we want!
+
+
+> It might not be always clear what `gather()` result will look like, you might need several iterations to get expected result.
+
+
+**Select columns cleverly**.
+Incidence data is in the age groups columns are labelled from `0-4` to `85 and older`, we need to supply the names of these columns to `gather()`.
+
+
+We can do this by supplying the names of all 18 age group columns to function (risking with typos and we need to backquote these names because of dash characters) or we can **do this in the smart way**.
+
+
+
+"dplyr" has **select helper functions** `?select_helpers` to select columns based on patterns in their names.
+
+
+One such function is `matches()`: matches a regular expression (`?regex`).
+Here we need to match columns with numbers in their names.
+Regular expression matching zero or more numbers is `"[[:digit:]]+"`.
+
+```{r}
+colnames(incidence)
+colnames(incidence) %>% matches("[[:digit:]]+", vars = .)
+```
+
+
+Here we use `gather()` to collect age group columns selected by `matches("[[:digit:]]+")` into columns "age" and "incidence".
 ```{r}
 ## Values are in the age group columns
-incidence_long <- gather(incidence_filt, "age", "incidence", matches("^[[:digit:]]+"))
+incidence_long <- gather(data = incidence, 
+                         key = "age", 
+                         value = "incidence", 
+                         matches("[[:digit:]]+"))
+```
 
-## Filter out missing data,
-incidence_long <- incidence_long %>% filter(complete.cases(.)) %>% as_data_frame()
+Now we have each value on separate row and can filter out missing values. Currently missing values are expicitly labeled with NA-s.
+Function `complete.cases()` gives logical vector indicating rows with no missing values (no NA-s).
+Based on this logical vector, `filter()` then keeps only `TRUE` rows.
+```{r, echo=FALSE}
+beforefilter <- nrow(incidence_long)
 ```
 
 
-Let's have a look at the dataset structure:
 ```{r}
-colnames(incidence_long)
+## Filter out missing data,
+incidence_long <- incidence_long %>% 
+  filter(complete.cases(.))
+## above is same as:
+## filter(incidence_long, complete.cases(incidence_long))
 ```
 
+Before filtering missing values table had `r beforefilter` rows and after `r nrow(incidence_long)`. 
+**Wow, looks that we don't have NA-s in our table!**
 
-## Bibliograafia
+
+
+## References
