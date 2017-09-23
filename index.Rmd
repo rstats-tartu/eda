@@ -100,10 +100,11 @@ download.file(url, "data/cancer_incidence_PK30.json")
 
 ## Import and prepare data
 
-First we download "tidyverse" library. We are going to need also "stringi" library for string manipulation:
+First we download "tidyverse" library. We are going to need also "stringr" library for string manipulation:
 ```{r, message=FALSE}
 library(tidyverse)
 library(stringi)
+library(stringr)
 ```
 
 
@@ -137,9 +138,8 @@ Year  Site                              Sex
 2000	..Tongue (C01-02)
 ```
 
-Summary data contain tallies from more than one **ICD10** code e.g. "(C00-C97)".
-Data rows follow the summary data rows and can be identified by increasing number of two dots `..` in the beginning of the variable name. 
-We need first to **identify and label summary data** so that we can decide later what we do with these rows. 
+Summary data contain tallies from range of **ICD10** codes e.g. "(C00-C97)".
+We probably need ICD10 codes to **identify and label summary data** so that we can decide later what we do with these rows. 
 
 
 Additionally, **we have three metadata columns** in dataset called "label", "source" and "updated".
@@ -154,36 +154,29 @@ updated <- unique(incidence$updated)
 
 Table metadata shows that values are **`r tolower(label)`** and originate from **`r data_source`** and were last time updated in **`r format.Date(updated)`**.
 
-We want to keep summary data ids in the table in a separate column called "is_sumvar", it's an logical.
-We use `summary_var()` helper function from "boulder" package to identify summary variables using preceding dots.
-To exclude table metadata constants, we use `select()` from "dplyr". 
+We use `extract_icd()` helper function from "boulder" package to extract ICD10 codes from Site variable.
 ```{r}
-## Label summary rows and exclude table metadata
-incidence <- mutate(incidence, 
-                    is_sumvar = summary_var(Site)) %>% 
-  select(-label, -source, -updated)
-## let's look at the result, select only two columns for viewing and filter out veeeery long varname
-select(incidence, Site, is_sumvar) %>% 
-  filter(Site != "All malignant neoplasms except skin (other) (C00-C97, except C44)")
+## Extract ICD10 codes and keep them in a separate dataframe
+icd10 <- mutate(incidence, 
+                icd10 = map(Site, extract_icd)) %>% 
+  select(Site, icd10)
+## Let's have a look, for reviewing the result we filter only short strings, note that icd10 is list column (list of character vectors)
+icd10 %>% filter(str_length(Site) < 30)
 ```
 
 
 While we are on this, we can now trim those offending dots from beginning of names. We use `stri_trim_left()` from "stringi" to trim all characters from the beginning of strings **until first alphabetic character** (`?regex`).
+To exclude table metadata constants, we use `select()` from "dplyr". 
 ```{r}
-## trim characters until first [[:alpha:]], we keep also original Site values in Site_old
+## trim characters until first [[:alpha:]], we keep also original Site values in Site_old and remove constant columns from table
 incidence <- mutate(incidence, 
                     Site_old = Site,
-                    Site = stri_trim_left(Site, "[[:alpha:]]"))
+                    Site = stri_trim_left(Site, "[[:alpha:]]")) %>% 
+  select(-label, -source, -updated)
 ## for reviewing the result we filter only short strings
 incidence %>% 
   select(Site_old, Site) %>% 
-  filter(stri_length(Site_old) < 20)
-```
-
-What the heck, let's get those ICD10 codes into separate column. 
-We can see
-```{r}
-stri_extract_all_boundaries(incidence$Site)
+  filter(str_length(Site_old) < 20)
 ```
 
 >Table is in the wide format, we want to convert it into long/tidy format and filter out missing data.
