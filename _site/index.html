@@ -295,7 +295,7 @@ incidence &lt;- json_to_df(path)</code></pre>
 ## #   `60-64` &lt;dbl&gt;, `65-69` &lt;dbl&gt;, `70-74` &lt;dbl&gt;, `75-79` &lt;dbl&gt;,
 ## #   `80-84` &lt;dbl&gt;, `85 and older` &lt;dbl&gt;, label &lt;chr&gt;, source &lt;chr&gt;,
 ## #   updated &lt;chr&gt;</code></pre>
-<p>Year, Site and Sex are factors. We convert Year to numeric and Site and Sex to character using <code>parse_</code> functions from “readr” package.</p>
+<p><strong>Year, Site and Sex are factors.</strong> We convert Year to numeric and Site and Sex to character using <code>parse_</code> functions from “readr” package.</p>
 <pre class="r"><code>## Year to numeric
 incidence &lt;- incidence %&gt;% mutate_at(&quot;Year&quot;, parse_number)
 ## Site and Sex to character
@@ -324,8 +324,7 @@ incidence</code></pre>
 <blockquote>
 <p>We can see that cancer incidence data is available from years 2000 to 2014 for both sexes, 18 age groups and 73 different types of cancer sites …</p>
 </blockquote>
-<p><strong>Hold on…</strong></p>
-<p>This table has data intermingled with summary data – incidence of specific cancer types are next to total incidence – , that’s bad!</p>
+<p><strong>Hold on…</strong> This table has data intermingled with summary data – incidence of specific cancer types are next to total incidence – , that’s bad!</p>
 <pre><code>Year  Site                              Sex
 &lt;fctr&gt;&lt;fctr&gt;                            &lt;fctr&gt;
 2000    All malignant neoplasms (C00-C97)   Men     &lt;- tallies
@@ -338,12 +337,12 @@ incidence</code></pre>
 2000    ..Lip (C00) Women   
 2000    ..Tongue (C01-02)   Men 
 2000    ..Tongue (C01-02)</code></pre>
-<p>Summaries are provided for different range of <strong>ICD10</strong> codes e.g. “(C00-C97)”, covering all types of cancer. We probably want to extract ICD10 codes to <strong>identify and label summary data</strong> so that we can decide later what we do with these rows.</p>
+<p>Summaries are provided for different range of <strong>ICD10</strong> codes e.g. “(C00-C97)” covers all types of cancer. We probably want to extract ICD10 codes to <strong>identify and label summary data</strong> so that we can decide later what we do with these rows.</p>
 <p>Additionally, <strong>we have three metadata columns</strong> in dataset called “label”, “source” and “updated”.</p>
 <ul>
-<li>Label says what the values are,</li>
-<li>source gives us info about data origin and</li>
-<li>updated is the date of the last update.</li>
+<li>Variable “label” says what the values are,</li>
+<li>“source” gives us info about data origin and</li>
+<li>“updated” is the date of the last update.</li>
 </ul>
 <p>Because these three seem to be constants in our table, we want to place them into separate objects for later use in plot annotation.</p>
 <pre class="r"><code>## keep label and source in a separate variables
@@ -351,7 +350,7 @@ label &lt;- unique(incidence$label)
 data_source &lt;- unique(incidence$source)
 updated &lt;- unique(incidence$updated)</code></pre>
 <p>Table metadata shows that values are <strong>age-specific incidence rate of malignant neoplasms per 100 000 inhabitants</strong> and originate from <strong>Estonian Cancer Registry</strong> and were last time updated in <strong>2015-06-18</strong>.</p>
-<p>We use <code>extract_icd()</code> helper function from “boulder” package to extract ICD10 codes from Site variable.</p>
+<p><strong>Extract ICD10 codes</strong>. We use <code>extract_icd()</code> helper function from “boulder” package to extract ICD10 codes from Site variable.</p>
 <pre class="r"><code>## Extract ICD10 codes and keep them in a separate dataframe
 icd10 &lt;- mutate(incidence, 
                 icd10 = map(Site, extract_icd)) %&gt;% 
@@ -372,7 +371,7 @@ icd10 %&gt;% filter(str_length(Site) &lt; 30)</code></pre>
 ##  9         ..Oesophagus (C15)  &lt;chr [1]&gt;
 ## 10         ..Oesophagus (C15)  &lt;chr [1]&gt;
 ## # ... with 1,100 more rows</code></pre>
-<p>While we are on this, we can now trim those offending dots from beginning of names. We use <code>stri_trim_left()</code> from “stringi” to trim all characters from the beginning of strings <strong>until first alphabetic character</strong> (<code>?regex</code>). To exclude table metadata constants, we use <code>select()</code> from “dplyr”.</p>
+<p>While we are on this, we also want to trim those offending dots from beginning of names. We use <code>stri_trim_left()</code> from “stringi” to trim all characters from the beginning of strings <strong>until first alphabetic character</strong> (<code>?regex</code>). To exclude table metadata constants, we use <code>select()</code> from “dplyr”.</p>
 <pre class="r"><code>## trim characters until first [[:alpha:]], we keep also original Site values in Site_old and remove constant columns from table
 incidence &lt;- mutate(incidence, 
                     Site_old = Site,

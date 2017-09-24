@@ -122,7 +122,7 @@ incidence <- json_to_df(path)
 incidence
 ```
 
-Year, Site and Sex are factors. 
+**Year, Site and Sex are factors.** 
 We convert Year to numeric and Site and Sex to character using `parse_` functions from "readr" package.
 ```{r}
 ## Year to numeric
@@ -136,9 +136,8 @@ incidence
 
 >We can see that cancer incidence data is available from years `r paste(range(incidence$Year), collapse = " to ")` for both sexes, `r sum(str_detect(colnames(incidence), "^[[:digit:]]"))` age groups and `r length(unique(incidence$Site))` different types of cancer sites ...
 
-**Hold on...**
+**Hold on...** This table has data intermingled with summary data -- incidence of specific cancer types are next to total incidence -- , that's bad! 
 
-This table has data intermingled with summary data -- incidence of specific cancer types are next to total incidence -- , that's bad! 
 ```
 Year  Site                              Sex
 <fctr><fctr>                            <fctr>
@@ -154,17 +153,19 @@ Year  Site                              Sex
 2000	..Tongue (C01-02)
 ```
 
-Summaries are provided for different range of **ICD10** codes e.g. "(C00-C97)", covering all types of cancer.
+Summaries are provided for different range of **ICD10** codes e.g. "(C00-C97)" covers all types of cancer.
 We probably want to extract ICD10 codes to **identify and label summary data** so that we can decide later what we do with these rows. 
 
 
 Additionally, **we have three metadata columns** in dataset called "label", "source" and "updated".
 
-- Label says what the values are, 
-- source gives us info about data origin and 
-- updated is the date of the last update.
+- Variable "label" says what the values are, 
+- "source" gives us info about data origin and 
+- "updated" is the date of the last update.
+
 
 Because these three seem to be constants in our table, we want to place them into separate objects for later use in plot annotation.
+
 ```{r}
 ## keep label and source in a separate variables
 label <- unique(incidence$label)
@@ -174,6 +175,7 @@ updated <- unique(incidence$updated)
 
 Table metadata shows that values are **`r tolower(label)`** and originate from **`r data_source`** and were last time updated in **`r format.Date(updated)`**.
 
+**Extract ICD10 codes**. 
 We use `extract_icd()` helper function from "boulder" package to extract ICD10 codes from Site variable.
 ```{r}
 ## Extract ICD10 codes and keep them in a separate dataframe
@@ -185,7 +187,8 @@ icd10 %>% filter(str_length(Site) < 30)
 ```
 
 
-While we are on this, we can now trim those offending dots from beginning of names. We use `stri_trim_left()` from "stringi" to trim all characters from the beginning of strings **until first alphabetic character** (`?regex`).
+While we are on this, we also want to trim those offending dots from beginning of names. 
+We use `stri_trim_left()` from "stringi" to trim all characters from the beginning of strings **until first alphabetic character** (`?regex`).
 To exclude table metadata constants, we use `select()` from "dplyr". 
 ```{r}
 ## trim characters until first [[:alpha:]], we keep also original Site values in Site_old and remove constant columns from table
