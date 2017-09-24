@@ -100,7 +100,7 @@ download.file(url, "data/cancer_incidence_PK30.json")
 
 ## Import and prepare data
 
-First we download "tidyverse" library. We are going to need also "stringr" library for string manipulation:
+First we download "tidyverse" library. We are going to need also "stringi" and "stringr" libraries for string manipulation (you guess correctly, stringr is based on stringi):
 ```{r, message=FALSE}
 library(tidyverse)
 library(stringi)
@@ -109,9 +109,10 @@ library(stringr)
 
 
 Then we import dataset using `json_to_df()` function from "boulder" library. 
-If you don't have "boulder", you can install it from github "[tpall/boulder](https://github.com/tpall/boulder)":
-"boulder" package has few helper functions and was created to work specificly with Estonian Health statistics and health research database.
-This package is still under development and we should use it carefully.
+
+You can install "boulder" from github "[tpall/boulder](https://github.com/tpall/boulder)":
+"boulder" package has few helper functions and was created to work specificly with Estonian Health Statistics and Health Research Database.
+However, "boulder" package is still under development and you should use it carefully.
 
 ```{r}
 # devtools::install_github("tpall/boulder")
@@ -122,7 +123,23 @@ incidence <- json_to_df(path)
 incidence
 ```
 
-This table has data intermingled with summary data, that's bad! 
+Year, Site and Sex are factors. 
+We convert Year to numeric and Site and Sex to character using `parse_` functions from "readr" package.
+```{r}
+## Year to numeric
+incidence <- incidence %>% mutate_at("Year", parse_number)
+## Site and Sex to character
+incidence <- incidence %>% mutate_at(vars(Site, Sex), parse_character)
+incidence
+```
+
+<br>
+
+>We can see that cancer incidence data is available from years `r paste(range(incidence$Year), collapse = " to ")` for both sexes, `r sum(str_detect(colnames(incidence), "^[[:digit:]]"))` age groups and `r length(unique(incidence$Site))` different types of cancer sites ...
+
+**Hold on...**
+
+This table has data intermingled with summary data -- incidence of specific cancer types are next to total incidence -- , that's bad! 
 ```
 Year  Site                              Sex
 <fctr><fctr>                            <fctr>
@@ -138,13 +155,17 @@ Year  Site                              Sex
 2000	..Tongue (C01-02)
 ```
 
-Summary data contain tallies from range of **ICD10** codes e.g. "(C00-C97)".
-We probably need ICD10 codes to **identify and label summary data** so that we can decide later what we do with these rows. 
+Summaries are provided for different range of **ICD10** codes e.g. "(C00-C97)", covering all types of cancer.
+We probably want to extract ICD10 codes to **identify and label summary data** so that we can decide later what we do with these rows. 
 
 
 Additionally, **we have three metadata columns** in dataset called "label", "source" and "updated".
-Label says what the values are, source gives us info about data origin and updated is the date of the last update.
-Because these two are constants in our table, we want to place them into separate objects for later use in plot annotation.
+
+- Label says what the values are, 
+- source gives us info about data origin and 
+- updated is the date of the last update.
+
+Because these three seem to be constants in our table, we want to place them into separate objects for later use in plot annotation.
 ```{r}
 ## keep label and source in a separate variables
 label <- unique(incidence$label)

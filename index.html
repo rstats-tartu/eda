@@ -189,17 +189,18 @@ download.file(url, &quot;data/cancer_incidence_PK30.json&quot;)</code></pre>
 </div>
 <div id="import-and-prepare-data" class="section level2">
 <h2>Import and prepare data</h2>
-<p>First we download “tidyverse” library. We are going to need also “stringr” library for string manipulation:</p>
+<p>First we download “tidyverse” library. We are going to need also “stringi” and “stringr” libraries for string manipulation (you guess correctly, stringr is based on stringi):</p>
 <pre class="r"><code>library(tidyverse)
 library(stringi)
 library(stringr)</code></pre>
-<p>Then we import dataset using <code>json_to_df()</code> function from “boulder” library. If you don’t have “boulder”, you can install it from github “<a href="https://github.com/tpall/boulder">tpall/boulder</a>”: “boulder” package has few helper functions and was created to work specificly with Estonian Health statistics and health research database. This package is still under development and we should use it carefully.</p>
+<p>Then we import dataset using <code>json_to_df()</code> function from “boulder” library.</p>
+<p>You can install “boulder” from github “<a href="https://github.com/tpall/boulder">tpall/boulder</a>”: “boulder” package has few helper functions and was created to work specificly with Estonian Health Statistics and Health Research Database. However, “boulder” package is still under development and you should use it carefully.</p>
 <pre class="r"><code># devtools::install_github(&quot;tpall/boulder&quot;)
 library(boulder)
 path &lt;- &quot;data/cancer_incidence_PK30.json&quot;
 ## json_to_df warns when data is not from Estonian Health Board
 incidence &lt;- json_to_df(path)</code></pre>
-<pre><code>## Data source is not Estonian Health Board, www.terviseamet.ee, but Estonian Cancer Registry.</code></pre>
+<pre><code>## Data source is Estonian Cancer Registry.</code></pre>
 <pre class="r"><code>incidence</code></pre>
 <pre><code>## # A tibble: 2,190 x 24
 ##      Year
@@ -221,7 +222,37 @@ incidence &lt;- json_to_df(path)</code></pre>
 ## #   `60-64` &lt;dbl&gt;, `65-69` &lt;dbl&gt;, `70-74` &lt;dbl&gt;, `75-79` &lt;dbl&gt;,
 ## #   `80-84` &lt;dbl&gt;, `85 and older` &lt;dbl&gt;, label &lt;chr&gt;, source &lt;chr&gt;,
 ## #   updated &lt;chr&gt;</code></pre>
-<p>This table has data intermingled with summary data, that’s bad!</p>
+<p>Year, Site and Sex are factors. We convert Year to numeric and Site and Sex to character using <code>parse_</code> functions from “readr” package.</p>
+<pre class="r"><code>## Year to numeric
+incidence &lt;- incidence %&gt;% mutate_at(&quot;Year&quot;, parse_number)
+## Site and Sex to character
+incidence &lt;- incidence %&gt;% mutate_at(vars(Site, Sex), parse_character)
+incidence</code></pre>
+<pre><code>## # A tibble: 2,190 x 24
+##     Year                                                              Site
+##    &lt;dbl&gt;                                                             &lt;chr&gt;
+##  1  2000                                 All malignant neoplasms (C00-C97)
+##  2  2000                                 All malignant neoplasms (C00-C97)
+##  3  2000 All malignant neoplasms except skin (other) (C00-C97, except C44)
+##  4  2000 All malignant neoplasms except skin (other) (C00-C97, except C44)
+##  5  2000                            Lip, oral cavity and pharynx (C00-C14)
+##  6  2000                            Lip, oral cavity and pharynx (C00-C14)
+##  7  2000                                                       ..Lip (C00)
+##  8  2000                                                       ..Lip (C00)
+##  9  2000                                                 ..Tongue (C01-02)
+## 10  2000                                                 ..Tongue (C01-02)
+## # ... with 2,180 more rows, and 22 more variables: Sex &lt;chr&gt;, `0-4` &lt;dbl&gt;,
+## #   `5-9` &lt;dbl&gt;, `10-14` &lt;dbl&gt;, `15-19` &lt;dbl&gt;, `20-24` &lt;dbl&gt;,
+## #   `25-29` &lt;dbl&gt;, `30-34` &lt;dbl&gt;, `35-39` &lt;dbl&gt;, `40-44` &lt;dbl&gt;,
+## #   `45-49` &lt;dbl&gt;, `50-54` &lt;dbl&gt;, `55-59` &lt;dbl&gt;, `60-64` &lt;dbl&gt;,
+## #   `65-69` &lt;dbl&gt;, `70-74` &lt;dbl&gt;, `75-79` &lt;dbl&gt;, `80-84` &lt;dbl&gt;, `85 and
+## #   older` &lt;dbl&gt;, label &lt;chr&gt;, source &lt;chr&gt;, updated &lt;chr&gt;</code></pre>
+<p><br></p>
+<blockquote>
+<p>We can see that cancer incidence data is available from years 2000 to 2014 for both sexes, 18 age groups and 73 different types of cancer sites …</p>
+</blockquote>
+<p><strong>Hold on…</strong></p>
+<p>This table has data intermingled with summary data – incidence of specific cancer types are next to total incidence – , that’s bad!</p>
 <pre><code>Year  Site                              Sex
 &lt;fctr&gt;&lt;fctr&gt;                            &lt;fctr&gt;
 2000    All malignant neoplasms (C00-C97)   Men     &lt;- tallies
@@ -234,8 +265,14 @@ incidence &lt;- json_to_df(path)</code></pre>
 2000    ..Lip (C00) Women   
 2000    ..Tongue (C01-02)   Men 
 2000    ..Tongue (C01-02)</code></pre>
-<p>Summary data contain tallies from range of <strong>ICD10</strong> codes e.g. “(C00-C97)”. We probably need ICD10 codes to <strong>identify and label summary data</strong> so that we can decide later what we do with these rows.</p>
-<p>Additionally, <strong>we have three metadata columns</strong> in dataset called “label”, “source” and “updated”. Label says what the values are, source gives us info about data origin and updated is the date of the last update. Because these two are constants in our table, we want to place them into separate objects for later use in plot annotation.</p>
+<p>Summaries are provided for different range of <strong>ICD10</strong> codes e.g. “(C00-C97)”, covering all types of cancer. We probably want to extract ICD10 codes to <strong>identify and label summary data</strong> so that we can decide later what we do with these rows.</p>
+<p>Additionally, <strong>we have three metadata columns</strong> in dataset called “label”, “source” and “updated”.</p>
+<ul>
+<li>Label says what the values are,</li>
+<li>source gives us info about data origin and</li>
+<li>updated is the date of the last update.</li>
+</ul>
+<p>Because these three seem to be constants in our table, we want to place them into separate objects for later use in plot annotation.</p>
 <pre class="r"><code>## keep label and source in a separate variables
 label &lt;- unique(incidence$label)
 data_source &lt;- unique(incidence$source)
@@ -250,7 +287,7 @@ icd10 &lt;- mutate(incidence,
 icd10 %&gt;% filter(str_length(Site) &lt; 30)</code></pre>
 <pre><code>## # A tibble: 1,110 x 2
 ##                          Site      icd10
-##                        &lt;fctr&gt;     &lt;list&gt;
+##                         &lt;chr&gt;     &lt;list&gt;
 ##  1                ..Lip (C00)  &lt;chr [1]&gt;
 ##  2                ..Lip (C00)  &lt;chr [1]&gt;
 ##  3          ..Tongue (C01-02)  &lt;chr [2]&gt;
@@ -274,7 +311,7 @@ incidence %&gt;%
   filter(str_length(Site_old) &lt; 20)</code></pre>
 <pre><code>## # A tibble: 660 x 2
 ##               Site_old              Site
-##                 &lt;fctr&gt;             &lt;chr&gt;
+##                  &lt;chr&gt;             &lt;chr&gt;
 ##  1         ..Lip (C00)         Lip (C00)
 ##  2         ..Lip (C00)         Lip (C00)
 ##  3   ..Tongue (C01-02)   Tongue (C01-02)
@@ -292,8 +329,6 @@ incidence %&gt;%
 <p><strong>Reshape data</strong>. Values are in the age group columns. We try to reshape table such as the age groups go into “age” column and values will be in the column called “incidence”. We use <code>gather()</code> from “tidyr” library to bring age group values into one column and incidence values into the other. Here we also need to supply the names of the value columns, otherwise <code>gather()</code> will put all categorical variables into the key column and all numeric values into value column.</p>
 <pre class="r"><code>## Let's look what happens when we run gather on our data
 gather(incidence)</code></pre>
-<pre><code>## Warning: attributes are not identical across measure variables;
-## they will be dropped</code></pre>
 <pre><code>## # A tibble: 48,180 x 2
 ##      key value
 ##    &lt;chr&gt; &lt;chr&gt;
