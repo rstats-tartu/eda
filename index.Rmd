@@ -6,7 +6,6 @@ bibliography: eda.bib
 output: 
   html_document:
     theme: readable
-  
 ---
 
 ```{r setup, include=FALSE}
