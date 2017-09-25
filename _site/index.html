@@ -198,14 +198,14 @@ $(document).ready(function () {
 </div>
 
 
-<div id="introduction" class="section level2">
-<h2>Introduction</h2>
+<div id="introduction" class="section level1">
+<h1>Introduction</h1>
 <p>Cancer and specially lung cancer is becoming one of the leading causes of mortality. In year 2012. cancer claimed 8.2 million lives worldwide, European Union had 15% share (1.27 million). Most cancer deaths are caused by lung-, liver-, stomach-, colorectal-, and breast cancer. Most frequent cancer types are different in females and males. Predictions show that cancer incidence increases from 14 million in 2012. to 22 million in 2030-ties.</p>
 <p>Vähkkasvajad on maailmas üks juhtivatest surma põhjustatavatest haigustest, nõudes 8.2 miljonit elu 2012. aastal, sealhulgas on EU-27 osakaal 2012. aastal 1.27 miljonit ehk 15%. Kopsu-, maksa-, mao-, kolorektaal- ja rinnakasvajad põhjustavad enim vähisurmasid. Sagedasemad vähitüübid on naistel ja meestel erinevad. Ennustatakse et haigestumus suureneb maailmas 14 miljonilt 2012. aastal 22 miljonini 2030-ndatel.</p>
 <p><br></p>
 </div>
-<div id="eda" class="section level2">
-<h2>EDA</h2>
+<div id="eda" class="section level1">
+<h1>EDA</h1>
 <p>Exploratory data analysis is iterative process <span class="citation">(Wickham and Grolemund 2017)</span> where you:</p>
 <ol style="list-style-type: decimal">
 <li><p>Generate questions about your data.</p></li>
@@ -218,7 +218,6 @@ $(document).ready(function () {
 <li><p>Proovitakse neile küsimustele vastuseid leida, kasutades andmete visualiseerimit, transformeerimist ja modelleerimist;</p></li>
 <li><p>Andmete põhjal saadud uute teadmiste najal täpsustatakse esitatavaid küsimusi ja tekivad uued küsimused <span class="citation">(Wickham and Grolemund 2017)</span>.</p></li>
 </ol>
-</div>
 <div id="questions" class="section level2">
 <h2>Questions</h2>
 <p>By using cancer incidence data from Estonian Cancer Registry we want to understand:</p>
@@ -483,7 +482,14 @@ incidence_year_sex &lt;-  incidence %&gt;%
   group_by(Site, Year, Sex) %&gt;% 
   summarise(cases = sum(cases),
             ave_pop = sum(ave_pop)) %&gt;% 
-  mutate(incidence = cases/(ave_pop/1E5))</code></pre>
+  mutate(incidence = cases/(ave_pop/1E5))
+
+## To save typing, we create function to calculate incidence on grouped table
+calculate_incidence &lt;- function(mytbl){
+  summarise(mytbl, cases = sum(cases),
+            ave_pop = sum(ave_pop)) %&gt;% 
+    mutate(incidence = cases/(ave_pop/1E5))
+}</code></pre>
 <p><strong>Men get more cancer in Estonia.</strong> Clearly, increasing trend for new cancer cases is still visible after normalisation for population size. However, incidence uncovers another important trend, namely, men tend to get more cancer than women in Estonia. While the number of cases per year was similar in men and women, the incidence is higher in men:</p>
 <pre class="r"><code>total_incidence_year_sex &lt;- incidence_year_sex %&gt;% 
   filter(Site == &quot;All malignant neoplasms (C00-C97)&quot;)
@@ -523,8 +529,44 @@ p %+% total_incidence_year_sex +
 </blockquote>
 <p>Which age groups get most cancer? Number of new cases versus incidence.</p>
 </div>
-<div id="references" class="section level2 unnumbered">
-<h2>References</h2>
+<div id="what-are-the-most-frequent-cancer-sites" class="section level2">
+<h2>What are the most frequent cancer sites?</h2>
+<p>Let’s have a look on top20 most frequent cancers, by number of cases or incidence. First, we remove two summary variables from table – “All malignant neoplasms (C00-C97)” and “All malignant neoplasms except skin (other) (C00-C97, except C44)”.</p>
+<pre class="r"><code>incidence &lt;- filter(incidence, !str_detect(Site, &quot;All malignant&quot;))
+incidence_year_site_sex &lt;- incidence %&gt;% 
+  group_by(Year, Site, Sex) %&gt;% 
+  calculate_incidence() 
+
+mutate_at(incidence_year_site_sex, vars(cases, incidence), mean) %&gt;% 
+  ungroup %&gt;% 
+  top_n(20, cases)</code></pre>
+<pre><code>## # A tibble: 20 x 6
+##     Year                       Site   Sex cases ave_pop incidence
+##    &lt;dbl&gt;                      &lt;chr&gt; &lt;chr&gt; &lt;dbl&gt;   &lt;int&gt;     &lt;dbl&gt;
+##  1  2004 Digestive organs (C15-C26)   Men 804.0  633580  118.4197
+##  2  2004 Digestive organs (C15-C26) Women 804.0  728970  118.4197
+##  3  2006 Digestive organs (C15-C26)   Men 849.0  626095  126.6067
+##  4  2006 Digestive organs (C15-C26) Women 849.0  720715  126.6067
+##  5  2007 Digestive organs (C15-C26)   Men 806.0  623155  121.0367
+##  6  2007 Digestive organs (C15-C26) Women 806.0  717525  121.0367
+##  7  2008 Digestive organs (C15-C26)   Men 853.0  621685  127.9992
+##  8  2008 Digestive organs (C15-C26) Women 853.0  715405  127.9992
+##  9  2009 Digestive organs (C15-C26)   Men 859.0  621060  129.4498
+## 10  2009 Digestive organs (C15-C26) Women 859.0  713455  129.4498
+## 11  2010 Digestive organs (C15-C26)   Men 835.0  620250  125.9615
+## 12  2010 Digestive organs (C15-C26) Women 835.0  711225  125.9615
+## 13  2011 Digestive organs (C15-C26)   Men 890.0  618919  134.8904
+## 14  2011 Digestive organs (C15-C26) Women 890.0  708520  134.8904
+## 15  2012 Digestive organs (C15-C26)   Men 896.0  617153  136.0886
+## 16  2012 Digestive organs (C15-C26) Women 896.0  705543  136.0886
+## 17  2013 Digestive organs (C15-C26)   Men 946.0  615543  144.0474
+## 18  2013 Digestive organs (C15-C26) Women 946.0  702454  144.0474
+## 19  2014 Digestive organs (C15-C26)   Men 958.5  614654  146.1237
+## 20  2014 Digestive organs (C15-C26) Women 958.5  699891  146.1237</code></pre>
+</div>
+</div>
+<div id="references" class="section level1 unnumbered">
+<h1>References</h1>
 <div id="refs" class="references">
 <div id="ref-wickham2017r">
 <p>Wickham, Hadley, and Garrett Grolemund. 2017. “R for Data Science.” O’Reilly Media. http://r4ds.had.co.nz.</p>

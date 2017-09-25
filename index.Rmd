@@ -12,7 +12,7 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Introduction
+# Introduction
 
 Cancer and specially lung cancer is becoming one of the leading causes of mortality.
 In year 2012. cancer claimed 8.2 million lives worldwide, European Union had 15% share (1.27 million).
@@ -28,7 +28,7 @@ Ennustatakse et haigestumus suureneb maailmas 14 miljonilt 2012. aastal 22 miljo
 
 <br>
 
-## EDA
+# EDA
 Exploratory data analysis is iterative process [@wickham2017r] where you:
 
 1. Generate questions about your data.
@@ -374,6 +374,13 @@ incidence_year_sex <-  incidence %>%
   summarise(cases = sum(cases),
             ave_pop = sum(ave_pop)) %>% 
   mutate(incidence = cases/(ave_pop/1E5))
+
+## To save typing, we create function to calculate incidence on grouped table
+calculate_incidence <- function(mytbl){
+  summarise(mytbl, cases = sum(cases),
+            ave_pop = sum(ave_pop)) %>% 
+    mutate(incidence = cases/(ave_pop/1E5))
+}
 ```
 
 
@@ -408,6 +415,22 @@ We can see that compared to counts both men and women show even bigger increase 
 
 Which age groups get most cancer? Number of new cases versus incidence.
 
+## What are the most frequent cancer sites?
+
+Let's have a look on top20 most frequent cancers, by number of cases or incidence.
+First, we remove two summary variables from table -- "All malignant neoplasms (C00-C97)" and "All malignant neoplasms except skin (other) (C00-C97, except C44)".
+```{r}
+incidence <- filter(incidence, !str_detect(Site, "All malignant"))
+incidence_year_site_sex <- incidence %>% 
+  group_by(Year, Site, Sex) %>% 
+  calculate_incidence() 
+
+mutate_at(incidence_year_site_sex, vars(cases, incidence), mean) %>% 
+  ungroup %>% 
+  top_n(20, cases)
+  
+```
 
 
-## References
+
+# References
