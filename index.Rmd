@@ -196,15 +196,11 @@ We also want to trim those offending dots from beginning of "Specified site" nam
 We use `stri_trim_left()` from "stringi" to trim all characters from the beginning of strings **until first alphabetic character** (`?regex`).
 Finally, to exclude table metadata constants, we use `select()` from "dplyr". 
 ```{r}
-## trim characters until first [[:alpha:]], we keep also original `Specified site` values in Site_old, rename `Specified site` to Site and remove constant columns from table
+## Trim characters from `Specified site` until first [[:alpha:]], 
+## we rename `Specified site` and constant columns from table
 cases <- mutate(cases, 
-                    Site_old = `Specified site`,
-                    Site = stri_trim_left(`Specified site`, "[[:alpha:]]")) %>% 
-  select(-label, -source, -updated)
-## for reviewing the result we filter only short strings
-cases %>% 
-  select(Site_old, Site) %>% 
-  filter(str_length(Site_old) < 20)
+                Site = stri_trim_left(`Specified site`, "[[:alpha:]]")) %>% 
+  select(-`Specified site`, -label, -source, -updated)
 ```
 
 
@@ -351,28 +347,43 @@ dir.create("data")
 download.file(url, "data/mean_annual_population.csv")
 ```
 
-
+Import mean annual population data. 
+Additionally, we need to summarise age groups "0" and "1-4" into "0-4".
 ```{r, message=FALSE}
+## Read in data
 pop <- read_csv("data/mean_annual_population.csv")
 
-## summarise 0 and 1-4 to 0-4 age group
+## Summarise 0 and 1-4 to 0-4 age group, keep only the latter
+## You really need backticks..
 pop_long <- mutate(pop, "0-4" = `0` + `1-4`) %>% 
   select(-`0`, -`1-4`) %>% 
   gather("age", "ave_pop", matches("^[[:digit:]]"))
-
-## calculate incidence per 100'000
-left_join(select(cases_long, -`Specified site`, -Site_old), pop_long) %>% 
-  group_by(Site, Year, Sex) %>% 
-  summarise(cases = sum(cases),
-            ave_pop = sum(ave_pop)) %>% 
-  mutate(incidence = cases/(ave_pop/1E5)) %>% 
-  arrange(desc(incidence))
 ```
 
 
+Merge cancer prevalence data with population size into new dataframe "incidence":
+```{r}
+incidence <- left_join(cases_long, pop_long)
+```
+
+Now we have number of new cases and population size side-by-side and can go on to calculate cancer incidence per 100'000 inhabitans:
+```{r}
+## Calculate incidence per 100'000
+incidence_year_sex <-  incidence %>% 
+  group_by(Site, Year, Sex) %>% 
+  summarise(cases = sum(cases),
+            ave_pop = sum(ave_pop)) %>% 
+  mutate(incidence = cases/(ave_pop/1E5))
+```
 
 
-
+**Men get more cancer in Estonia.** While the number of cases per year was similar in men and women, the incidence is higher in men:
+```{r}
+total_incidence_year_sex <- incidence_year_sex %>% 
+  filter(Site == "All malignant neoplasms (C00-C97)")
+## we give new data to plot and we also must supply aes for Sex
+p %+% total_incidence_year_sex + aes(y = incidence, color = Sex)
+```
 
 
 
