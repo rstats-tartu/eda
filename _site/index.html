@@ -232,13 +232,13 @@ $(document).ready(function () {
 <p>However, when doing data analysis 80% of time will be spent on data munging where you also become familiar with your dataset. So it’s time well spent.</p>
 </blockquote>
 </div>
-<div id="cancer-incidence-data-from-estonian-cancer-registry" class="section level2">
-<h2>Cancer incidence data from Estonian cancer registry</h2>
-<p>Estonian cancer registry data is available via <a href="http://pxweb.tai.ee/PXWeb2015/pxweb/en/02Haigestumus/02Haigestumus__04Pahaloomulised%20kasvajad/?tablelist=true&amp;rxid=279523e2-1ea1-4a02-920b-f85bb19a908d">Health statistics and health research database</a>. We are using cancer incidence dataset from table “PK30: Age-specific incidence rate of malignant neoplasms per 100 000 inhabitants by site and sex”.</p>
-<p>Detailed information about variables in this dataset can be found from <a href="http://pxweb.tai.ee/PXWeb2015/pxweb/en/02Haigestumus/02Haigestumus__04Pahaloomulised%20kasvajad/PK30.px/?rxid=3155fc9b-3ab1-40b0-9e70-beadfb6af83c">here</a>.</p>
+<div id="cancer-data-from-estonian-cancer-registry" class="section level2">
+<h2>Cancer data from Estonian cancer registry</h2>
+<p>Estonian cancer registry data is available via <a href="http://pxweb.tai.ee/PXWeb2015/pxweb/en/02Haigestumus/02Haigestumus__04Pahaloomulised%20kasvajad/?tablelist=true&amp;rxid=279523e2-1ea1-4a02-920b-f85bb19a908d">Health statistics and health research database</a>. We are using cancer incidence dataset from table “PK10: New cases of malignant neoplasms by specified site, sex and age group”.</p>
+<p>Detailed information about variables in this dataset can be found from <a href="http://pxweb.tai.ee/PXWeb2015/Resources/PX/Databases/02Haigestumus/04Pahaloomulised%20kasvajad/PKinfo_en.htm">here</a>.</p>
 <p><br></p>
 <div class="figure">
-<img src="img/pk30-page.png" alt="Screen caption from dataset download page. Note that data was downloaded in JSON format." width="600" />
+<img src="img/pk10-page.png" alt="Screen caption from dataset download page. Note that data was downloaded in JSON format." width="600" />
 <p class="caption">
 Screen caption from dataset download page. Note that data was downloaded in JSON format.
 </p>
@@ -255,26 +255,28 @@ Screen caption from dataset download page. Note that data was downloaded in JSON
 <div id="download-cancer-incidence-dataset-from-github" class="section level2">
 <h2>Download cancer incidence dataset from GitHub</h2>
 <p>Download “cancer_incidence_PK30.json” file from “rstats-tartu/datasets” GitHub repo:</p>
-<pre class="r"><code>url &lt;- &quot;https://raw.githubusercontent.com/rstats-tartu/datasets/master/cancer_incidence_PK30.json&quot;
+<pre class="r"><code>url &lt;- &quot;https://raw.githubusercontent.com/rstats-tartu/datasets/master/cancer_newcases_PK10.json&quot;
+## issues warning when dir exists
 dir.create(&quot;data&quot;)
 download.file(url, &quot;data/cancer_incidence_PK30.json&quot;)</code></pre>
 <p><br></p>
 </div>
 <div id="import-and-prepare-data" class="section level2">
 <h2>Import and prepare data</h2>
-<p>First we download “tidyverse” library. We are going to need also “stringi” and “stringr” libraries for string manipulation (you guess correctly, stringr is based on stringi):</p>
+<p>First we download “tidyverse” library. We are going to need also “stringi” and “stringr” libraries for string manipulation (you guess correctly, stringr is based on stringi). “broom” package converts S3 model object into dataframes for tidy handling.</p>
 <pre class="r"><code>library(tidyverse)
 library(stringi)
-library(stringr)</code></pre>
+library(stringr)
+library(broom)</code></pre>
 <p>Then we import dataset using <code>json_to_df()</code> function from “boulder” library.</p>
 <p>You can install “boulder” from github “<a href="https://github.com/tpall/boulder">tpall/boulder</a>”: “boulder” package has few helper functions and was created to work specificly with Estonian Health Statistics and Health Research Database. However, “boulder” package is still under development and you should use it carefully.</p>
 <pre class="r"><code># devtools::install_github(&quot;tpall/boulder&quot;)
 library(boulder)
-path &lt;- &quot;data/cancer_incidence_PK30.json&quot;
+path &lt;- &quot;data/cancer_newcases_PK10.json&quot;
 ## json_to_df warns when data is not from Estonian Health Board
-incidence &lt;- json_to_df(path)</code></pre>
+cases &lt;- json_to_df(path)</code></pre>
 <pre><code>## Data source is Estonian Cancer Registry.</code></pre>
-<pre class="r"><code>incidence</code></pre>
+<pre class="r"><code>cases</code></pre>
 <pre><code>## # A tibble: 2,190 x 24
 ##      Year
 ##    &lt;fctr&gt;
@@ -288,21 +290,21 @@ incidence &lt;- json_to_df(path)</code></pre>
 ##  8   2000
 ##  9   2000
 ## 10   2000
-## # ... with 2,180 more rows, and 23 more variables: Site &lt;fctr&gt;,
-## #   Sex &lt;fctr&gt;, `0-4` &lt;dbl&gt;, `5-9` &lt;dbl&gt;, `10-14` &lt;dbl&gt;, `15-19` &lt;dbl&gt;,
-## #   `20-24` &lt;dbl&gt;, `25-29` &lt;dbl&gt;, `30-34` &lt;dbl&gt;, `35-39` &lt;dbl&gt;,
-## #   `40-44` &lt;dbl&gt;, `45-49` &lt;dbl&gt;, `50-54` &lt;dbl&gt;, `55-59` &lt;dbl&gt;,
-## #   `60-64` &lt;dbl&gt;, `65-69` &lt;dbl&gt;, `70-74` &lt;dbl&gt;, `75-79` &lt;dbl&gt;,
-## #   `80-84` &lt;dbl&gt;, `85 and older` &lt;dbl&gt;, label &lt;chr&gt;, source &lt;chr&gt;,
-## #   updated &lt;chr&gt;</code></pre>
-<p><strong>Year, Site and Sex are factors.</strong> We convert Year to numeric and Site and Sex to character using <code>parse_</code> functions from “readr” package.</p>
+## # ... with 2,180 more rows, and 23 more variables: `Specified
+## #   site` &lt;fctr&gt;, Sex &lt;fctr&gt;, `0-4` &lt;int&gt;, `5-9` &lt;int&gt;, `10-14` &lt;int&gt;,
+## #   `15-19` &lt;int&gt;, `20-24` &lt;int&gt;, `25-29` &lt;int&gt;, `30-34` &lt;int&gt;,
+## #   `35-39` &lt;int&gt;, `40-44` &lt;int&gt;, `45-49` &lt;int&gt;, `50-54` &lt;int&gt;,
+## #   `55-59` &lt;int&gt;, `60-64` &lt;int&gt;, `65-69` &lt;int&gt;, `70-74` &lt;int&gt;,
+## #   `75-79` &lt;int&gt;, `80-84` &lt;int&gt;, `85 and older` &lt;int&gt;, label &lt;chr&gt;,
+## #   source &lt;chr&gt;, updated &lt;chr&gt;</code></pre>
+<p><strong>Year, <code>Specified site</code> and Sex are factors.</strong> We convert Year to numeric and “Specified site” and Sex to character using <code>parse_</code> functions from “readr” package.</p>
 <pre class="r"><code>## Year to numeric
-incidence &lt;- incidence %&gt;% mutate_at(&quot;Year&quot;, parse_number)
+cases &lt;- cases %&gt;% mutate_at(&quot;Year&quot;, parse_number)
 ## Site and Sex to character
-incidence &lt;- incidence %&gt;% mutate_at(vars(Site, Sex), parse_character)
-incidence</code></pre>
+cases &lt;- cases %&gt;% mutate_at(vars(`Specified site`, Sex), parse_character)
+cases</code></pre>
 <pre><code>## # A tibble: 2,190 x 24
-##     Year                                                              Site
+##     Year                                                  `Specified site`
 ##    &lt;dbl&gt;                                                             &lt;chr&gt;
 ##  1  2000                                 All malignant neoplasms (C00-C97)
 ##  2  2000                                 All malignant neoplasms (C00-C97)
@@ -314,17 +316,17 @@ incidence</code></pre>
 ##  8  2000                                                       ..Lip (C00)
 ##  9  2000                                                 ..Tongue (C01-02)
 ## 10  2000                                                 ..Tongue (C01-02)
-## # ... with 2,180 more rows, and 22 more variables: Sex &lt;chr&gt;, `0-4` &lt;dbl&gt;,
-## #   `5-9` &lt;dbl&gt;, `10-14` &lt;dbl&gt;, `15-19` &lt;dbl&gt;, `20-24` &lt;dbl&gt;,
-## #   `25-29` &lt;dbl&gt;, `30-34` &lt;dbl&gt;, `35-39` &lt;dbl&gt;, `40-44` &lt;dbl&gt;,
-## #   `45-49` &lt;dbl&gt;, `50-54` &lt;dbl&gt;, `55-59` &lt;dbl&gt;, `60-64` &lt;dbl&gt;,
-## #   `65-69` &lt;dbl&gt;, `70-74` &lt;dbl&gt;, `75-79` &lt;dbl&gt;, `80-84` &lt;dbl&gt;, `85 and
-## #   older` &lt;dbl&gt;, label &lt;chr&gt;, source &lt;chr&gt;, updated &lt;chr&gt;</code></pre>
+## # ... with 2,180 more rows, and 22 more variables: Sex &lt;chr&gt;, `0-4` &lt;int&gt;,
+## #   `5-9` &lt;int&gt;, `10-14` &lt;int&gt;, `15-19` &lt;int&gt;, `20-24` &lt;int&gt;,
+## #   `25-29` &lt;int&gt;, `30-34` &lt;int&gt;, `35-39` &lt;int&gt;, `40-44` &lt;int&gt;,
+## #   `45-49` &lt;int&gt;, `50-54` &lt;int&gt;, `55-59` &lt;int&gt;, `60-64` &lt;int&gt;,
+## #   `65-69` &lt;int&gt;, `70-74` &lt;int&gt;, `75-79` &lt;int&gt;, `80-84` &lt;int&gt;, `85 and
+## #   older` &lt;int&gt;, label &lt;chr&gt;, source &lt;chr&gt;, updated &lt;chr&gt;</code></pre>
 <p><br></p>
 <blockquote>
-<p>We can see that cancer incidence data is available from years 2000 to 2014 for both sexes, 18 age groups and 73 different types of cancer sites …</p>
+<p>We can see that number of new cancer cases is available from years 2000 to 2014 for both sexes, 18 age groups and 1 different types of cancer sites …</p>
 </blockquote>
-<p><strong>Hold on…</strong> This table has data intermingled with summary data – incidence of specific cancer types are next to total incidence – , that’s bad!</p>
+<p><strong>Hold on…</strong> This table has data intermingled with summary data – cases of specific cancer types are next to total cases – , that’s bad!</p>
 <pre><code>Year  Site                              Sex
 &lt;fctr&gt;&lt;fctr&gt;                            &lt;fctr&gt;
 2000    All malignant neoplasms (C00-C97)   Men     &lt;- tallies
@@ -337,7 +339,8 @@ incidence</code></pre>
 2000    ..Lip (C00) Women   
 2000    ..Tongue (C01-02)   Men 
 2000    ..Tongue (C01-02)</code></pre>
-<p>Summaries are provided for different range of <strong>ICD10</strong> codes e.g. “(C00-C97)” covers all types of cancer. We probably want to extract ICD10 codes to <strong>identify and label summary data</strong> so that we can decide later what we do with these rows.</p>
+<p>Summaries are provided for different range of <strong>ICD10</strong> codes e.g. “(C00-C97)” covers all types of cancer.</p>
+<p>We must keep this in mind when summarising data.</p>
 <p>Additionally, <strong>we have three metadata columns</strong> in dataset called “label”, “source” and “updated”.</p>
 <ul>
 <li>Variable “label” says what the values are,</li>
@@ -346,39 +349,29 @@ incidence</code></pre>
 </ul>
 <p>Because these three seem to be constants in our table, we want to place them into separate objects for later use in plot annotation.</p>
 <pre class="r"><code>## keep label and source in a separate variables
-label &lt;- unique(incidence$label)
-data_source &lt;- unique(incidence$source)
-updated &lt;- unique(incidence$updated)</code></pre>
-<p>Table metadata shows that values are <strong>age-specific incidence rate of malignant neoplasms per 100 000 inhabitants</strong> and originate from <strong>Estonian Cancer Registry</strong> and were last time updated in <strong>2015-06-18</strong>.</p>
-<p><strong>Extract ICD10 codes</strong>. We use <code>extract_icd()</code> helper function from “boulder” package to extract ICD10 codes from Site variable.</p>
-<pre class="r"><code>## Extract ICD10 codes and keep them in a separate dataframe
-icd10 &lt;- mutate(incidence, 
-                icd10 = map(Site, extract_icd)) %&gt;% 
-  select(Site, icd10)
-## Let&#39;s have a look, for reviewing the result we filter only short strings, note that icd10 is list column (list of character vectors)
-icd10 %&gt;% filter(str_length(Site) &lt; 30)</code></pre>
-<pre><code>## # A tibble: 1,110 x 2
-##                          Site      icd10
-##                         &lt;chr&gt;     &lt;list&gt;
-##  1                ..Lip (C00)  &lt;chr [1]&gt;
-##  2                ..Lip (C00)  &lt;chr [1]&gt;
-##  3          ..Tongue (C01-02)  &lt;chr [2]&gt;
-##  4          ..Tongue (C01-02)  &lt;chr [2]&gt;
-##  5        ..Nasopharynx (C11)  &lt;chr [1]&gt;
-##  6        ..Nasopharynx (C11)  &lt;chr [1]&gt;
-##  7 Digestive organs (C15-C26) &lt;chr [12]&gt;
-##  8 Digestive organs (C15-C26) &lt;chr [12]&gt;
-##  9         ..Oesophagus (C15)  &lt;chr [1]&gt;
-## 10         ..Oesophagus (C15)  &lt;chr [1]&gt;
-## # ... with 1,100 more rows</code></pre>
-<p>While we are on this, we also want to trim those offending dots from beginning of names. We use <code>stri_trim_left()</code> from “stringi” to trim all characters from the beginning of strings <strong>until first alphabetic character</strong> (<code>?regex</code>). To exclude table metadata constants, we use <code>select()</code> from “dplyr”.</p>
-<pre class="r"><code>## trim characters until first [[:alpha:]], we keep also original Site values in Site_old and remove constant columns from table
-incidence &lt;- mutate(incidence, 
-                    Site_old = Site,
-                    Site = stri_trim_left(Site, &quot;[[:alpha:]]&quot;)) %&gt;% 
+label &lt;- unique(cases$label)
+data_source &lt;- unique(cases$source)
+updated &lt;- unique(cases$updated)</code></pre>
+<p>Table metadata shows that values are <strong>new cases of malignant neoplasms</strong> and originate from <strong>Estonian Cancer Registry</strong> and were last time updated in <strong>2015-06-18</strong>.</p>
+<!-- **Extract ICD10 codes**.  -->
+<!-- We use `extract_icd()` helper function from "boulder" package to extract ICD10 codes from Site variable. -->
+<!-- ```{r} -->
+<!-- ## Extract ICD10 codes and keep them in a separate dataframe -->
+<!-- icd10 <- mutate(cases,  -->
+<!--                 icd10 = map(`Specified site`, extract_icd)) %>%  -->
+<!--   select(`Specified site`, icd10) -->
+<!-- ## Let's have a look, for reviewing the result we filter only short strings, note that icd10 is list column (list of character vectors) -->
+<!-- icd10 %>% filter(str_length(`Specified site`) < 30) -->
+<!-- ``` -->
+<p>We also want to trim those offending dots from beginning of “Specified site” names and rename “Specified site” into something more convenient, like “Site”.</p>
+<p>We use <code>stri_trim_left()</code> from “stringi” to trim all characters from the beginning of strings <strong>until first alphabetic character</strong> (<code>?regex</code>). Finally, to exclude table metadata constants, we use <code>select()</code> from “dplyr”.</p>
+<pre class="r"><code>## trim characters until first [[:alpha:]], we keep also original `Specified site` values in Site_old, rename `Specified site` to Site and remove constant columns from table
+cases &lt;- mutate(cases, 
+                    Site_old = `Specified site`,
+                    Site = stri_trim_left(`Specified site`, &quot;[[:alpha:]]&quot;)) %&gt;% 
   select(-label, -source, -updated)
 ## for reviewing the result we filter only short strings
-incidence %&gt;% 
+cases %&gt;% 
   select(Site_old, Site) %&gt;% 
   filter(str_length(Site_old) &lt; 20)</code></pre>
 <pre><code>## # A tibble: 660 x 2
@@ -398,10 +391,10 @@ incidence %&gt;%
 <blockquote>
 <p>Table is in the wide format, we want to convert it into long/tidy format and filter out missing data.</p>
 </blockquote>
-<p><strong>Reshape data</strong>. Values are in the age group columns. We try to reshape table such as the age groups go into “age” column and values will be in the column called “incidence”. We use <code>gather()</code> from “tidyr” library to bring age group values into one column and incidence values into the other. Here we also need to supply the names of the value columns, otherwise <code>gather()</code> will put all categorical variables into the key column and all numeric values into value column.</p>
+<p><strong>Reshape data</strong>. Values are in the age group columns. We try to reshape table such as the age groups go into “age” column and values will be in the column called “cases”. We use <code>gather()</code> from “tidyr” library to bring age group values into one column and cases values into the other. Here we also need to supply the names of the value columns, otherwise <code>gather()</code> will put all categorical variables into the key column and all numeric values into value column.</p>
 <pre class="r"><code>## Let&#39;s look what happens when we run gather on our data
-gather(incidence)</code></pre>
-<pre><code>## # A tibble: 48,180 x 2
+gather(cases)</code></pre>
+<pre><code>## # A tibble: 50,370 x 2
 ##      key value
 ##    &lt;chr&gt; &lt;chr&gt;
 ##  1  Year  2000
@@ -414,37 +407,79 @@ gather(incidence)</code></pre>
 ##  8  Year  2000
 ##  9  Year  2000
 ## 10  Year  2000
-## # ... with 48,170 more rows</code></pre>
+## # ... with 50,360 more rows</code></pre>
 <p>Not what we want!</p>
 <blockquote>
 <p>It might not be always clear what <code>gather()</code> result will look like, you might need several iterations to get expected result.</p>
 </blockquote>
-<p><strong>Select columns cleverly</strong>. Incidence data is in the age groups columns are labelled from <code>0-4</code> to <code>85 and older</code>, we need to supply the names of these columns to <code>gather()</code>.</p>
+<p><strong>Select columns cleverly</strong>. cases data is in the age groups columns are labelled from <code>0-4</code> to <code>85 and older</code>, we need to supply the names of these columns to <code>gather()</code>.</p>
 <p>We can do this by supplying the names of all 18 age group columns to function (risking with typos and we need to backquote these names because of dash characters) or we can <strong>do this in the smart way</strong>.</p>
 <p>“dplyr” has <strong>select helper functions</strong> <code>?select_helpers</code> to select columns based on patterns in their names.</p>
 <p>One such function is <code>matches()</code>: matches a regular expression (<code>?regex</code>). Here we need to match columns with numbers in their names. Regular expression matching zero or more numbers is <code>&quot;[[:digit:]]+&quot;</code>.</p>
-<pre class="r"><code>colnames(incidence)</code></pre>
-<pre><code>##  [1] &quot;Year&quot;         &quot;Site&quot;         &quot;Sex&quot;          &quot;0-4&quot;         
-##  [5] &quot;5-9&quot;          &quot;10-14&quot;        &quot;15-19&quot;        &quot;20-24&quot;       
-##  [9] &quot;25-29&quot;        &quot;30-34&quot;        &quot;35-39&quot;        &quot;40-44&quot;       
-## [13] &quot;45-49&quot;        &quot;50-54&quot;        &quot;55-59&quot;        &quot;60-64&quot;       
-## [17] &quot;65-69&quot;        &quot;70-74&quot;        &quot;75-79&quot;        &quot;80-84&quot;       
-## [21] &quot;85 and older&quot; &quot;Site_old&quot;</code></pre>
-<pre class="r"><code>colnames(incidence) %&gt;% matches(&quot;[[:digit:]]+&quot;, vars = .)</code></pre>
+<p>Let’s run test first using character vector of column names:</p>
+<pre class="r"><code>colnames(cases)</code></pre>
+<pre><code>##  [1] &quot;Year&quot;           &quot;Specified site&quot; &quot;Sex&quot;            &quot;0-4&quot;           
+##  [5] &quot;5-9&quot;            &quot;10-14&quot;          &quot;15-19&quot;          &quot;20-24&quot;         
+##  [9] &quot;25-29&quot;          &quot;30-34&quot;          &quot;35-39&quot;          &quot;40-44&quot;         
+## [13] &quot;45-49&quot;          &quot;50-54&quot;          &quot;55-59&quot;          &quot;60-64&quot;         
+## [17] &quot;65-69&quot;          &quot;70-74&quot;          &quot;75-79&quot;          &quot;80-84&quot;         
+## [21] &quot;85 and older&quot;   &quot;Site_old&quot;       &quot;Site&quot;</code></pre>
+<pre class="r"><code>colnames(cases) %&gt;% matches(&quot;[[:digit:]]+&quot;, vars = .)</code></pre>
 <pre><code>##  [1]  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21</code></pre>
-<p>Here we use <code>gather()</code> to collect age group columns selected by <code>matches(&quot;[[:digit:]]+&quot;)</code> into columns “age” and “incidence”.</p>
+<p>We can see that “[[:digit:]]+” matches columns 4 to 21. Seems like it works!</p>
+<p>Here we use <code>gather()</code> to collect age group columns selected by <code>matches(&quot;[[:digit:]]+&quot;)</code> into columns “age” and “cases”.</p>
 <pre class="r"><code>## Values are in the age group columns
-incidence_long &lt;- gather(data = incidence, 
+cases_long &lt;- gather(data = cases, 
                          key = &quot;age&quot;, 
-                         value = &quot;incidence&quot;, 
+                         value = &quot;cases&quot;, 
                          matches(&quot;[[:digit:]]+&quot;))</code></pre>
 <p>Now we have each value on separate row and can filter out missing values. Currently missing values are expicitly labeled with NA-s. Function <code>complete.cases()</code> gives logical vector indicating rows with no missing values (no NA-s). Based on this logical vector, <code>filter()</code> then keeps only <code>TRUE</code> rows.</p>
 <pre class="r"><code>## Filter out missing data,
-incidence_long &lt;- incidence_long %&gt;% 
+cases_long &lt;- cases_long %&gt;% 
   filter(complete.cases(.))
 ## above is same as:
-## filter(incidence_long, complete.cases(incidence_long))</code></pre>
+## filter(cases_long, complete.cases(cases_long))</code></pre>
 <p>Before filtering missing values table had 39420 rows and after 39420. <strong>Wow, looks that we don’t have NA-s in our table!</strong></p>
+</div>
+<div id="cancer-trend-in-estonia" class="section level2">
+<h2>Cancer trend in Estonia</h2>
+<p>It’s simple, we have already summary data available in our table variable called “All malignant neoplasms (C00-C97)” in Site column. We plot this variable versus Years and for begginning we lump together men and women:.</p>
+<pre class="r"><code>total_cases_per_year &lt;- cases_long %&gt;% 
+  filter(Site == &quot;All malignant neoplasms (C00-C97)&quot;) %&gt;% 
+  group_by(Year) %&gt;% 
+  summarise(total_cases = sum(cases)) 
+## we disect plot to an object, then we can reuse it
+p &lt;- total_cases_per_year %&gt;% 
+  ggplot(aes(Year, total_cases)) +
+  geom_point() +
+  geom_line() +
+  ylab(str_wrap(label, width = 40)) +
+  ggtitle(&quot;All malignant neoplasms (C00-C97)&quot;,
+          subtitle = paste(&quot;Source:&quot;, data_source))
+p</code></pre>
+<p><img src="index_files/figure-html/unnamed-chunk-13-1.png" width="672" /></p>
+<pre><code>## [1] 6032 8558</code></pre>
+<pre><code>## [1] &quot;42%&quot;</code></pre>
+<p>We can see that the number of new cases has increased 42% since year 2000, from 6032 to 8558.</p>
+<p>Is the number of cases similar in males and females? Again, we look on the all cancers, but also group by Sex:</p>
+<pre class="r"><code>total_cases_per_year_sex &lt;- cases_long %&gt;% 
+  filter(Site == &quot;All malignant neoplasms (C00-C97)&quot;) %&gt;% 
+  group_by(Year, Sex) %&gt;% 
+  summarise(total_cases = sum(cases)) 
+## we give new data to plot and we also must supply aes for Sex
+p %+% total_cases_per_year_sex + aes(color = Sex)</code></pre>
+<p><img src="index_files/figure-html/unnamed-chunk-15-1.png" width="672" /></p>
+<p>We can see that cancer prevalence is similar in both gender.</p>
+<p><strong>How big is the increase per year</strong>, although we have count data and perhaps should use Poisson model. However, as the mean gets further away from zero even as low as 10, the Poisson distribution looks like a normal distribution. It becomes symmetric with it a mode at the mean. So we can safely fit normal linear model, parameter estimates will be similar to Poisson.</p>
+<pre class="r"><code>mod1 &lt;- lm(total_cases ~ Year, total_cases_per_year)
+## tidy is from broom package
+tidy(mod1)</code></pre>
+<pre><code>##          term     estimate    std.error statistic      p.value
+## 1 (Intercept) -377461.3595 19284.938088 -19.57286 4.986739e-11
+## 2        Year     191.6786     9.608816  19.94820 3.924643e-11</code></pre>
+<p>We can see that number of new cancer cases has increased by 192 each year during this period. NB! intercept term does not make sense in this case.</p>
+<p>So we have seen 192 more new cases each year during 2000 and 2014. Do we have more cancer or does this reflects increase in population size?</p>
+<p>To answer this question, we need population size normalised values of cancer cases – <strong>incidence</strong>. Cancer incidence is obtained by dividing cancer prevalence with population size.</p>
 </div>
 <div id="references" class="section level2 unnumbered">
 <h2>References</h2>
