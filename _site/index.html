@@ -488,16 +488,18 @@ incidence_year_sex &lt;-  incidence %&gt;%
 <pre class="r"><code>total_incidence_year_sex &lt;- incidence_year_sex %&gt;% 
   filter(Site == &quot;All malignant neoplasms (C00-C97)&quot;)
 ## we give new data to plot and we also must supply aes for Sex
-p %+% total_incidence_year_sex + aes(y = incidence, color = Sex)</code></pre>
+p %+% total_incidence_year_sex + 
+  aes(y = incidence, color = Sex) +
+  ylab(&quot;Cancer incidence per 100&#39;000&quot;)</code></pre>
 <p><img src="index_files/figure-html/unnamed-chunk-21-1.png" width="672" /></p>
 <p>Is increasing incidence trend comparable to the increase in number of cases? We can try to look at this by calculating percent increase in 2014 compared to 2000. Do we get more cancer or do we diagnose more cancer… ?</p>
 <table>
 <thead>
 <tr class="header">
 <th align="left">Sex</th>
-<th align="right">Min</th>
-<th align="right">Max</th>
-<th align="left">increase</th>
+<th align="right">2000</th>
+<th align="right">2014</th>
+<th align="left">Increase</th>
 </tr>
 </thead>
 <tbody>
@@ -519,6 +521,7 @@ p %+% total_incidence_year_sex + aes(y = incidence, color = Sex)</code></pre>
 <blockquote>
 <p>We can settle that cancer trend in Estonia is worryingly increasing.</p>
 </blockquote>
+<p>Which age groups get most cancer? Number of new cases versus incidence.</p>
 </div>
 <div id="references" class="section level2 unnumbered">
 <h2>References</h2>

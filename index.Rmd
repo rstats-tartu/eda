@@ -384,24 +384,29 @@ While the number of cases per year was similar in men and women, the incidence i
 total_incidence_year_sex <- incidence_year_sex %>% 
   filter(Site == "All malignant neoplasms (C00-C97)")
 ## we give new data to plot and we also must supply aes for Sex
-p %+% total_incidence_year_sex + aes(y = incidence, color = Sex)
+p %+% total_incidence_year_sex + 
+  aes(y = incidence, color = Sex) +
+  ylab("Cancer incidence per 100'000")
 ```
 
 Is increasing incidence trend comparable to the increase in number of cases? 
 We can try to look at this by calculating percent increase in 2014 compared to 2000.
 Do we get more cancer or do we diagnose more cancer... ?
 ```{r, echo=FALSE}
+## here we use again min and max as proxies to year 2000 and 2014, respectively
 incidence_range <- total_incidence_year_sex %>% 
   group_by(Sex) %>% 
   summarise(Min = round(min(incidence)),
             Max = round(max(incidence)),
             increase = sprintf("%1.0f%%", (Max-Min)*100/Min))
-knitr::kable(incidence_range)
+knitr::kable(incidence_range, col.names = c("Sex", "2000", "2014", "Increase"))
 ```
 
 We can see that compared to counts both men and women show even bigger increase in cancer rates in Estonia. 
 
 >We can settle that cancer trend in Estonia is worryingly increasing.
+
+Which age groups get most cancer? Number of new cases versus incidence.
 
 
 
