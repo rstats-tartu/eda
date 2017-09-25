@@ -92,7 +92,7 @@ Download "cancer_incidence_PK30.json" file from "rstats-tartu/datasets" GitHub r
 url <- "https://raw.githubusercontent.com/rstats-tartu/datasets/master/cancer_newcases_PK10.json"
 ## issues warning when dir exists
 dir.create("data")
-download.file(url, "data/cancer_incidence_PK30.json")
+download.file(url, "data/cancer_incidence_PK10.json")
 ```
 
 
@@ -142,7 +142,7 @@ cases
 
 **Hold on...** This table has data intermingled with summary data -- cases of specific cancer types are next to total cases -- , that's bad! 
 
-```
+``` r
 Year  Site                              Sex
 <fctr><fctr>                            <fctr>
 2000	All malignant neoplasms (C00-C97)	Men	    <- tallies
@@ -268,8 +268,7 @@ beforefilter <- nrow(cases_long)
 
 ```{r}
 ## Filter out missing data,
-cases_long <- cases_long %>% 
-  filter(complete.cases(.))
+cases_long <- cases_long %>% filter(complete.cases(.))
 ## above is same as:
 ## filter(cases_long, complete.cases(cases_long))
 ```
@@ -279,7 +278,7 @@ Before filtering missing values table had `r beforefilter` rows and after `r nro
 
 ## Cancer trend in Estonia
 
-It's simple, we have already summary data available in our table variable called "All malignant neoplasms (C00-C97)" in Site column.
+It's quite simple, we have already summary data available in our table under variable called "All malignant neoplasms (C00-C97)" in Site column.
 We plot this variable versus Years and for begginning we lump together men and women:.
 
 ```{r}
@@ -287,7 +286,8 @@ total_cases_per_year <- cases_long %>%
   filter(Site == "All malignant neoplasms (C00-C97)") %>% 
   group_by(Year) %>% 
   summarise(total_cases = sum(cases)) 
-## we disect plot to an object, then we can reuse it
+
+## We direct plot to an object, then we can reuse it
 p <- total_cases_per_year %>% 
   ggplot(aes(Year, total_cases)) +
   geom_point() +
@@ -305,7 +305,13 @@ cases_range
 sprintf("%1.0f%%", round(diff(cases_range)/cases_range[1], 2)*100)
 ```
 
-We can see that the number of new cases has increased `r sprintf("%1.0f%%", round(diff(cases_range)/cases_range[1], 2)*100)` since year 2000, from `r paste(range(total_cases_per_year$total_cases), collapse = " to ")`.
+We can see that the number of new cases increased `r sprintf("%1.0f%%", round(diff(cases_range)/cases_range[1], 2)*100)` between 2000 to 2014, from `r paste(range(total_cases_per_year$total_cases), collapse = " to ")`.
+This means on average `r round(diff(cases_range)/length(total_cases_per_year$Year))` more tumors each year.
+To better examplify this trend, we can add linear model fit to the plot using `geom_smooth()` function from "ggplot2":
+```{r}
+p + geom_smooth(method = "lm", se = FALSE)
+```
+
 
 
 Is the number of cases similar in males and females?
