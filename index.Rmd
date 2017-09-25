@@ -333,22 +333,8 @@ p %+% total_cases_per_year_sex + aes(color = Sex)
 We can see that cancer prevalence is similar in both gender.
 
 
-**How big is the increase per year**, although we have count data and perhaps should use Poisson model. 
-However, as the mean gets further away from zero even as low as 10, the Poisson distribution looks like a normal distribution. 
-It becomes symmetric with it a mode at the mean.
-So we can safely fit normal linear model, parameter estimates will be similar to Poisson.
+So we have seen on average `r round(diff(cases_range)/length(total_cases_per_year$Year))` more new cases each year during 2000 and 2014.
 
-```{r}
-mod1 <- lm(total_cases ~ Year, total_cases_per_year)
-## tidy is from broom package
-tidy(mod1)
-```
-
-We can see that number of new cancer cases has increased by `r round(tidy(mod1)$estimate[2])` each year during this period. 
-NB! intercept term does not make sense in this case.
-
-
-So we have seen `r round(tidy(mod1)$estimate[2])` more new cases each year during 2000 and 2014. 
 Do we have more cancer or does this reflects increase in population size?
 
 To answer this question, we need population size normalised values of cancer cases -- **incidence**.
@@ -356,7 +342,21 @@ Cancer incidence is obtained by dividing cancer prevalence with population size.
 
 
 ```{r}
+library(tidyverse)
+pop <- read_csv("data/mean_annual_population.csv")
 
+## summarise 0 and 1-4 to 0-4 age group
+pop_long <- mutate(pop, "0-4" = `0` + `1-4`) %>% 
+  select(-`0`, -`1-4`) %>% 
+  gather("age", "ave_pop", matches("^[[:digit:]]"))
+
+## calculate incidence per 100'000
+left_join(select(cases_long, -`Specified site`, -Site_old), pop_long) %>% 
+  group_by(Site, Year, Sex) %>% 
+  summarise(cases = sum(cases),
+            ave_pop = sum(ave_pop)) %>% 
+  mutate(incidence = cases/(ave_pop/1E5)) %>% 
+  arrange(desc(incidence))
 ```
 
 
