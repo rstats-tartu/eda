@@ -340,9 +340,19 @@ Do we have more cancer or does this reflects increase in population size?
 To answer this question, we need population size normalised values of cancer cases -- **incidence**.
 Cancer incidence is obtained by dividing cancer prevalence with population size.
 
+**Mean population data**.
+We obtained mean annual population data from Statistics Estonia.
+You can download this dataset from "[rstats-tartu/datasets](https://github.com/rstats-tartu/datasets)" repo.
 
-```{r}
-library(tidyverse)
+Download population data:
+```{r, message=FALSE}
+url <- "https://raw.githubusercontent.com/rstats-tartu/datasets/master/mean_annual_population.csv"
+dir.create("data")
+download.file(url, "data/mean_annual_population.csv")
+```
+
+
+```{r, message=FALSE}
 pop <- read_csv("data/mean_annual_population.csv")
 
 ## summarise 0 and 1-4 to 0-4 age group
