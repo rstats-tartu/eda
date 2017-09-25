@@ -307,9 +307,13 @@ sprintf("%1.0f%%", round(diff(cases_range)/cases_range[1], 2)*100)
 
 We can see that the number of new cases increased `r sprintf("%1.0f%%", round(diff(cases_range)/cases_range[1], 2)*100)` between 2000 to 2014, from `r paste(range(total_cases_per_year$total_cases), collapse = " to ")`.
 This means on average `r round(diff(cases_range)/length(total_cases_per_year$Year))` more tumors each year.
-To better examplify this trend, we can add linear model fit to the plot using `geom_smooth()` function from "ggplot2":
+To better examplify this trend, we can add linear model fit to the plot using `geom_smooth()` function from "ggplot2".
+Now we can perceive that cancer cases are rocketing into sky.
+This is because our plot y axis starts at 6000 and we have ommitted baseline from graph, we can put this increase into better perspective by adding `y = 0` to the plot.
 ```{r}
-p + geom_smooth(method = "lm", se = FALSE)
+p + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  expand_limits(y = 0)
 ```
 
 
