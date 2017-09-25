@@ -484,12 +484,39 @@ incidence_year_sex &lt;-  incidence %&gt;%
   summarise(cases = sum(cases),
             ave_pop = sum(ave_pop)) %&gt;% 
   mutate(incidence = cases/(ave_pop/1E5))</code></pre>
-<p><strong>Men get more cancer in Estonia.</strong> While the number of cases per year was similar in men and women, the incidence is higher in men:</p>
+<p><strong>Men get more cancer in Estonia.</strong> Clearly, increasing trend for new cancer cases is still visible after normalisation for population size. However, incidence uncovers another important trend, namely, men tend to get more cancer than women in Estonia. While the number of cases per year was similar in men and women, the incidence is higher in men:</p>
 <pre class="r"><code>total_incidence_year_sex &lt;- incidence_year_sex %&gt;% 
   filter(Site == &quot;All malignant neoplasms (C00-C97)&quot;)
 ## we give new data to plot and we also must supply aes for Sex
 p %+% total_incidence_year_sex + aes(y = incidence, color = Sex)</code></pre>
 <p><img src="index_files/figure-html/unnamed-chunk-21-1.png" width="672" /></p>
+<p>Is increasing incidence trend comparable to the increase in number of cases? We calculate percent increase in 2014 compared to 2000. It’s impressive…</p>
+<p>Do we get more cancer or do we diagnose more cancer… ?</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Sex</th>
+<th align="right">Min</th>
+<th align="right">Max</th>
+<th align="left">increase</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Men</td>
+<td align="right">448</td>
+<td align="right">693</td>
+<td align="left">55%</td>
+</tr>
+<tr class="even">
+<td align="left">Women</td>
+<td align="right">417</td>
+<td align="right">614</td>
+<td align="left">47%</td>
+</tr>
+</tbody>
+</table>
+<p>We can see that men have shown even bigger increase in cancer rates than women in Estonia.</p>
 </div>
 <div id="references" class="section level2 unnumbered">
 <h2>References</h2>

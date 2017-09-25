@@ -377,7 +377,9 @@ incidence_year_sex <-  incidence %>%
 ```
 
 
-**Men get more cancer in Estonia.** While the number of cases per year was similar in men and women, the incidence is higher in men:
+**Men get more cancer in Estonia.** Clearly, increasing trend for new cancer cases is still visible after normalisation for population size. 
+However, incidence uncovers another important trend, namely, men tend to get more cancer than women in Estonia.
+While the number of cases per year was similar in men and women, the incidence is higher in men:
 ```{r}
 total_incidence_year_sex <- incidence_year_sex %>% 
   filter(Site == "All malignant neoplasms (C00-C97)")
@@ -385,7 +387,18 @@ total_incidence_year_sex <- incidence_year_sex %>%
 p %+% total_incidence_year_sex + aes(y = incidence, color = Sex)
 ```
 
+Is increasing incidence trend comparable to the increase in number of cases? We calculate percent increase in 2014 compared to 2000. It's impressive...
 
+Do we get more cancer or do we diagnose more cancer... ?
+```{r, echo=FALSE}
+incidence_range <- total_incidence_year_sex %>% 
+  group_by(Sex) %>% 
+  summarise(Min = round(min(incidence)),
+            Max = round(max(incidence)),
+            increase = sprintf("%1.0f%%", (Max-Min)*100/Min))
+knitr::kable(incidence_range)
+```
 
+We can see that men have shown even bigger increase in cancer rates than women in Estonia.
 
 ## References
