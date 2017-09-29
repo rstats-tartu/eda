@@ -425,7 +425,7 @@ incidence_year_sex %>%
 
 
 
-```{r, fig.cap="Cancer incidence values of All malignant neoplasms for year 2000 in Estonian Health Statistics database."}
+```{r, out.width=300, fig.cap="Cancer incidence values of All malignant neoplasms for year 2000 in Estonian Health Statistics database."}
 knitr::include_graphics("img/verify_incidence.png")
 ```
 
