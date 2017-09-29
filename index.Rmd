@@ -423,7 +423,7 @@ incidence_year_sex %>%
   knitr::kable()
 ```
 
-
+<br>
 
 ```{r, echo = FALSE, out.width=600, fig.cap="Cancer incidence values of All malignant neoplasms for year 2000 in Estonian Health Statistics database."}
 knitr::include_graphics("img/verify_incidence.png")
@@ -431,7 +431,7 @@ knitr::include_graphics("img/verify_incidence.png")
 
 <br>
 
->Seems that we are calculating cancer incidence similarly as professional statiticians.
+>Seems that we are calculating cancer incidence similarly as professional statisticians.
 
 <br>
 
@@ -475,22 +475,75 @@ Which age groups get most cancer? Number of new cases versus incidence.
 
 ## What are the most frequent cancer sites?
 
-Let's have a look on top20 most frequent cancers, by number of cases or incidence.
-First, we remove two summary variables from table -- "All malignant neoplasms (C00-C97)" and "All malignant neoplasms except skin (other) (C00-C97, except C44)".
-```{r}
-incidence_long <- filter(incidence_long, !str_detect(Site, "All malignant"))
-incidence_year_site_sex <- incidence_long %>% 
-  group_by(Year, Site, Sex) %>% 
-  summarise(cases = sum(cases),
-            ave_pop = sum(ave_pop)) %>% 
-  mutate(incidence = cases/(ave_pop/1E5))
+Let's have a look at Top10 most frequent cancers.
+Most frequent cancers are different in men and women.
 
-mutate_at(incidence_year_site_sex, vars(cases, incidence), mean) %>% 
-  ungroup %>% 
-  top_n(20, cases)
-  
+First, we try to remove some summary variables from table.
+"boulder" package has *adhoc* function `icd_sums()` that tries to id rows that contain summary data over many cancer sites using ICD codes in "Sites" strings.
+```{r}
+## boulder has adhoc function that tries to id parent Sites
+parent_nodes <- boulder::icd_sums(unique(incidence_long$Site))
+unique_parents <- unique(parent_nodes$Parent)
 ```
 
+This can be also achieved by "manually" specifying Site values to be omitted.
+
+
+We calculate incidence for each Site per Sex, let's drop Year by taking its average:
+```{r}
+incidence_sex_filt <- incidence_year_sex %>% 
+  filter(!Site %in% unique_parents) %>% 
+  group_by(Site, Sex) %>% 
+  summarise(incidence = mean(incidence))
+```
+
+List of top10 cancers by Sex:
+```{r}
+## list of top10 cancers
+listof_top10 <- incidence_sex_filt %>% 
+  group_by(Sex) %>% 
+  top_n(10, incidence) %>% 
+  arrange(desc(incidence))
+```
+
+Plot most frequent cancers:
+```{r}
+incidence_sex_filt %>% 
+  filter(Site %in% listof_top10$Site) %>% 
+  ggplot(aes(Sex, incidence)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~ Site) +
+  labs(title = "Top10 cancer sites from both genders",
+       subtitle = "Mean annual incidence from years 2000 to 2014",
+       y = "Cancer incidence per 100000",
+       caption = paste("Source:", data_source)) +
+  theme(axis.title.x = element_blank())
+```
+
+Here is another take using the same data:
+```{r}
+incidence_sex_filt %>%
+  filter(Site %in% listof_top10$Site) %>% 
+  ggplot(aes(reorder(Site, incidence), incidence, fill = Sex)) +
+  geom_bar(stat = "identity") +
+  labs(y = "Cancer incidence per 100000",
+       title = "Top10 cancer sites from both genders",
+       subtitle = "Mean annual incidence from years 2000 to 2014",
+       caption = paste("Data:", data_source)) +
+  coord_flip() +
+  theme(axis.title.y = element_blank(),
+        legend.title = element_blank()) +
+  scale_fill_manual(values = c("darkgray", "orange"))
+```
+
+What these two graphs tell us?
+
+
+## Age groups
+
+```{r}
+
+```
 
 
 # References

@@ -676,6 +676,7 @@ select(incidence_year_sex, Site, Year, incidence, everything())</code></pre>
 </tr>
 </tbody>
 </table>
+<p><br></p>
 <div class="figure">
 <img src="img/verify_incidence.png" alt="Cancer incidence values of All malignant neoplasms for year 2000 in Estonian Health Statistics database." width="600" />
 <p class="caption">
@@ -684,7 +685,7 @@ Cancer incidence values of All malignant neoplasms for year 2000 in Estonian Hea
 </div>
 <p><br></p>
 <blockquote>
-<p>Seems that we are calculating cancer incidence similarly as professional statiticians.</p>
+<p>Seems that we are calculating cancer incidence similarly as professional statisticians.</p>
 </blockquote>
 <p><br></p>
 <p><strong>Men get more cancer in Estonia.</strong> Clearly, increasing trend for new cancer cases is still visible after normalisation for population size. However, incidence uncovers another important trend, namely, men tend to get more cancer than women in Estonia. While the number of cases per year was similar in men and women, the incidence is higher in men:</p>
@@ -732,40 +733,53 @@ total_incidence_year_sex %&gt;%
 </div>
 <div id="what-are-the-most-frequent-cancer-sites" class="section level2">
 <h2>What are the most frequent cancer sites?</h2>
-<p>Let’s have a look on top20 most frequent cancers, by number of cases or incidence. First, we remove two summary variables from table – “All malignant neoplasms (C00-C97)” and “All malignant neoplasms except skin (other) (C00-C97, except C44)”.</p>
-<pre class="r"><code>incidence_long &lt;- filter(incidence_long, !str_detect(Site, &quot;All malignant&quot;))
-incidence_year_site_sex &lt;- incidence_long %&gt;% 
-  group_by(Year, Site, Sex) %&gt;% 
-  summarise(cases = sum(cases),
-            ave_pop = sum(ave_pop)) %&gt;% 
-  mutate(incidence = cases/(ave_pop/1E5))
-
-mutate_at(incidence_year_site_sex, vars(cases, incidence), mean) %&gt;% 
-  ungroup %&gt;% 
-  top_n(20, cases)</code></pre>
-<pre><code>## # A tibble: 20 x 6
-##     Year                       Site   Sex cases ave_pop incidence
-##    &lt;dbl&gt;                      &lt;chr&gt; &lt;chr&gt; &lt;dbl&gt;   &lt;int&gt;     &lt;dbl&gt;
-##  1  2004 Digestive organs (C15-C26)   Men 804.0  633580  118.4197
-##  2  2004 Digestive organs (C15-C26) Women 804.0  728970  118.4197
-##  3  2006 Digestive organs (C15-C26)   Men 849.0  626095  126.6067
-##  4  2006 Digestive organs (C15-C26) Women 849.0  720715  126.6067
-##  5  2007 Digestive organs (C15-C26)   Men 806.0  623155  121.0367
-##  6  2007 Digestive organs (C15-C26) Women 806.0  717525  121.0367
-##  7  2008 Digestive organs (C15-C26)   Men 853.0  621685  127.9992
-##  8  2008 Digestive organs (C15-C26) Women 853.0  715405  127.9992
-##  9  2009 Digestive organs (C15-C26)   Men 859.0  621060  129.4498
-## 10  2009 Digestive organs (C15-C26) Women 859.0  713455  129.4498
-## 11  2010 Digestive organs (C15-C26)   Men 835.0  620250  125.9615
-## 12  2010 Digestive organs (C15-C26) Women 835.0  711225  125.9615
-## 13  2011 Digestive organs (C15-C26)   Men 890.0  618919  134.8904
-## 14  2011 Digestive organs (C15-C26) Women 890.0  708520  134.8904
-## 15  2012 Digestive organs (C15-C26)   Men 896.0  617153  136.0886
-## 16  2012 Digestive organs (C15-C26) Women 896.0  705543  136.0886
-## 17  2013 Digestive organs (C15-C26)   Men 946.0  615543  144.0474
-## 18  2013 Digestive organs (C15-C26) Women 946.0  702454  144.0474
-## 19  2014 Digestive organs (C15-C26)   Men 958.5  614654  146.1237
-## 20  2014 Digestive organs (C15-C26) Women 958.5  699891  146.1237</code></pre>
+<p>Let’s have a look at Top10 most frequent cancers. Most frequent cancers are different in men and women.</p>
+<p>First, we try to remove some summary variables from table. “boulder” package has <em>adhoc</em> function <code>icd_sums()</code> that tries to id rows that contain summary data over many cancer sites using ICD codes in “Sites” strings.</p>
+<pre class="r"><code>## boulder has adhoc function that tries to id parent Sites
+parent_nodes &lt;- boulder::icd_sums(unique(incidence_long$Site))
+unique_parents &lt;- unique(parent_nodes$Parent)</code></pre>
+<p>This can be also achieved by “manually” specifying Site values to be omitted.</p>
+<p>We calculate incidence for each Site per Sex, let’s drop Year by taking its average:</p>
+<pre class="r"><code>incidence_sex_filt &lt;- incidence_year_sex %&gt;% 
+  filter(!Site %in% unique_parents) %&gt;% 
+  group_by(Site, Sex) %&gt;% 
+  summarise(incidence = mean(incidence))</code></pre>
+<p>List of top10 cancers by Sex:</p>
+<pre class="r"><code>## list of top10 cancers
+listof_top10 &lt;- incidence_sex_filt %&gt;% 
+  group_by(Sex) %&gt;% 
+  top_n(10, incidence) %&gt;% 
+  arrange(desc(incidence))</code></pre>
+<p>Plot most frequent cancers:</p>
+<pre class="r"><code>incidence_sex_filt %&gt;% 
+  filter(Site %in% listof_top10$Site) %&gt;% 
+  ggplot(aes(Sex, incidence)) +
+  geom_bar(stat = &quot;identity&quot;) +
+  facet_wrap(~ Site) +
+  labs(title = &quot;Top10 cancer sites from both genders&quot;,
+       subtitle = &quot;Mean annual incidence from years 2000 to 2014&quot;,
+       y = &quot;Cancer incidence per 100000&quot;,
+       caption = paste(&quot;Source:&quot;, data_source)) +
+  theme(axis.title.x = element_blank())</code></pre>
+<p><img src="index_files/figure-html/unnamed-chunk-32-1.png" width="672" /></p>
+<p>Here is another take using the same data:</p>
+<pre class="r"><code>incidence_sex_filt %&gt;%
+  filter(Site %in% listof_top10$Site) %&gt;% 
+  ggplot(aes(reorder(Site, incidence), incidence, fill = Sex)) +
+  geom_bar(stat = &quot;identity&quot;) +
+  labs(y = &quot;Cancer incidence per 100000&quot;,
+       title = &quot;Top10 cancer sites from both genders&quot;,
+       subtitle = &quot;Mean annual incidence from years 2000 to 2014&quot;,
+       caption = paste(&quot;Data:&quot;, data_source)) +
+  coord_flip() +
+  theme(axis.title.y = element_blank(),
+        legend.title = element_blank()) +
+  scale_fill_manual(values = c(&quot;darkgray&quot;, &quot;orange&quot;))</code></pre>
+<p><img src="index_files/figure-html/unnamed-chunk-33-1.png" width="672" /></p>
+<p>What these two graphs tell us?</p>
+</div>
+<div id="age-groups" class="section level2">
+<h2>Age groups</h2>
 </div>
 </div>
 <div id="references" class="section level1 unnumbered">
