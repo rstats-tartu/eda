@@ -57,7 +57,7 @@ By using cancer incidence data from Estonian Cancer Registry we want to understa
 <br>
 
 
-> However, when doing data analysis 80% of time will be spent on data munging where you also become familiar with your dataset. So it's time well spent.
+> However, when doing data analysis 80% of time will be spent on data wrangling where you also become familiar with your dataset. So it's time well spent.
 
 
 ## Cancer data from Estonian cancer registry
@@ -87,12 +87,11 @@ Detailed instructions can be found [here](https://rstats-tartu.github.io/creater
 <br>
 
 ## Download cancer incidence dataset from GitHub
-Download "cancer_incidence_PK30.json" file from "rstats-tartu/datasets" GitHub repo: 
-```{r, eval=FALSE}
+Download "cancer_incidence_PK10.json" file from "rstats-tartu/datasets" GitHub repo: 
+```{r}
 url <- "https://raw.githubusercontent.com/rstats-tartu/datasets/master/cancer_newcases_PK10.json"
-## issues warning when dir exists
 dir.create("data")
-download.file(url, "data/cancer_incidence_PK10.json")
+download.file(url, "data/cancer_newcases_PK10.json")
 ```
 
 
@@ -100,45 +99,56 @@ download.file(url, "data/cancer_incidence_PK10.json")
 
 ## Import and prepare data
 
-First we download "tidyverse" library. We are going to need also "stringi" and "stringr" libraries for string manipulation (you guess correctly, stringr is based on stringi).
+First we load "tidyverse" library. We are going to need also "stringi" and "stringr" libraries for string manipulation (you guess correctly, stringr is based on stringi).
 "broom" package converts S3 model object into dataframes for tidy handling.
 ```{r, message=FALSE}
 library(tidyverse)
 library(stringi)
 library(stringr)
-library(broom)
 ```
 
 
 Then we import dataset using `json_to_df()` function from "boulder" library. 
 
-You can install "boulder" from github "[tpall/boulder](https://github.com/tpall/boulder)":
+You can **install "boulder" from GitHub** "[tpall/boulder](https://github.com/tpall/boulder)":
 "boulder" package has few helper functions and was created to work specificly with Estonian Health Statistics and Health Research Database.
 However, "boulder" package is still under development and you should use it carefully.
 
+Install "boulder" package if not installed, you need also "devtools" library to install package from GitHub:
 ```{r}
-# devtools::install_github("tpall/boulder")
+# install.packages("devtools")
+if(!"boulder" %in% installed.packages()){
+devtools::install_github("tpall/boulder")
+  }
+```
+
+## Import dataset
+```{r}
 library(boulder)
-path <- "data/cancer_newcases_PK10.json"
-## json_to_df warns when data is not from Estonian Health Board
-cases <- json_to_df(path)
-cases
+incidence <- json_to_df("data/cancer_newcases_PK10.json")
+incidence
+```
+
+
+For better overview let's filter out "Specified site" values that are longer than 30 characters.
+```{r}
+filter(incidence, str_length(`Specified site`) < 30)
 ```
 
 **Year, `Specified site` and Sex are factors.** 
 We convert Year to numeric and "Specified site" and Sex to character using `parse_` functions from "readr" package.
 ```{r}
 ## Year to numeric
-cases <- cases %>% mutate_at("Year", parse_number)
+incidence <- incidence %>% mutate_at("Year", parse_number)
 ## Site and Sex to character
-cases <- cases %>% mutate_at(vars(`Specified site`, Sex), parse_character)
-cases
+incidence <- incidence %>% mutate_at(c("Specified site", "Sex"), parse_character)
+incidence
 ```
 
 <br>
 
->We can see that number of new cancer cases is available from years `r paste(range(cases$Year), collapse = " to ")` for both sexes, `r sum(str_detect(colnames(cases), "^[[:digit:]]"))` age groups and 
-`r length(unique(cases["Specified site"]))` different types of cancer sites ...
+>We can see that number of new cancer cases is available from years `r paste(range(incidence$Year), collapse = " to ")` for both sexes, `r sum(str_detect(colnames(incidence), "^[[:digit:]]"))` age groups and 
+`r length(unique(incidence["Specified site"]))` different types of cancer sites ...
 
 **Hold on...** This table has data intermingled with summary data -- cases of specific cancer types are next to total cases -- , that's bad! 
 
@@ -159,7 +169,7 @@ Year  Site                              Sex
 
 Summaries are provided for different range of **ICD10** codes e.g. "(C00-C97)" covers all types of cancer.
 
-We must keep this in mind when summarising data.
+Here we are not going to do fix this, but we must keep this in mind when summarising data.
 
 Additionally, **we have three metadata columns** in dataset called "label", "source" and "updated".
 
@@ -172,24 +182,15 @@ Because these three seem to be constants in our table, we want to place them int
 
 ```{r}
 ## keep label and source in a separate variables
-label <- unique(cases$label)
-data_source <- unique(cases$source)
-updated <- unique(cases$updated)
+label <- unique(incidence$label)
+data_source <- unique(incidence$source)
+updated <- unique(incidence$updated)
+label
+data_source
+updated
 ```
 
 Table metadata shows that values are **`r tolower(label)`** and originate from **`r data_source`** and were last time updated in **`r format.Date(updated)`**.
-
-<!-- **Extract ICD10 codes**.  -->
-<!-- We use `extract_icd()` helper function from "boulder" package to extract ICD10 codes from Site variable. -->
-<!-- ```{r} -->
-<!-- ## Extract ICD10 codes and keep them in a separate dataframe -->
-<!-- icd10 <- mutate(cases,  -->
-<!--                 icd10 = map(`Specified site`, extract_icd)) %>%  -->
-<!--   select(`Specified site`, icd10) -->
-<!-- ## Let's have a look, for reviewing the result we filter only short strings, note that icd10 is list column (list of character vectors) -->
-<!-- icd10 %>% filter(str_length(`Specified site`) < 30) -->
-<!-- ``` -->
-
 
 We also want to trim those offending dots from beginning of "Specified site" names and rename "Specified site" into something more convenient, like "Site". 
 
@@ -198,7 +199,7 @@ Finally, to exclude table metadata constants, we use `select()` from "dplyr".
 ```{r}
 ## Trim characters from `Specified site` until first [[:alpha:]], 
 ## we rename `Specified site` and constant columns from table
-cases <- mutate(cases, 
+incidence <- mutate(incidence, 
                 Site = stri_trim_left(`Specified site`, "[[:alpha:]]")) %>% 
   select(-`Specified site`, -label, -source, -updated)
 ```
@@ -214,7 +215,7 @@ Here we also need to supply the names of the value columns, otherwise `gather()`
 
 ```{r}
 ## Let's look what happens when we run gather on our data
-gather(cases)
+gather(incidence)
 ```
 Not what we want!
 
@@ -223,11 +224,10 @@ Not what we want!
 
 
 **Select columns cleverly**.
-cases data is in the age groups columns are labelled from `0-4` to `85 and older`, we need to supply the names of these columns to `gather()`.
+Cancer cases data is in the age groups columns are labelled from `0-4` to `85 and older`, we need to supply the names of these columns to `gather()`.
 
 
 We can do this by supplying the names of all 18 age group columns to function (risking with typos and we need to backquote these names because of dash characters) or we can **do this in the smart way**.
-
 
 
 "dplyr" has **select helper functions** `?select_helpers` to select columns based on patterns in their names.
@@ -239,8 +239,8 @@ Regular expression matching zero or more numbers is `"[[:digit:]]+"`.
 
 Let's run test first using character vector of column names:
 ```{r}
-colnames(cases)
-colnames(cases) %>% matches("[[:digit:]]+", vars = .)
+colnames(incidence)
+colnames(incidence) %>% matches("[[:digit:]]+", vars = .)
 ```
 
 We can see that "[[:digit:]]+" matches columns 4 to 21. Seems like it works!
@@ -248,29 +248,33 @@ We can see that "[[:digit:]]+" matches columns 4 to 21. Seems like it works!
 Here we use `gather()` to collect age group columns selected by `matches("[[:digit:]]+")` into columns "age" and "cases".
 ```{r}
 ## Values are in the age group columns
-cases_long <- gather(data = cases, 
+incidence_long <- gather(data = incidence, 
                          key = "age", 
                          value = "cases", 
                          matches("[[:digit:]]+"))
+incidence_long
 ```
 
 Now we have each value on separate row and can filter out missing values. Currently missing values are expicitly labeled with NA-s.
 Function `complete.cases()` gives logical vector indicating rows with no missing values (no NA-s).
 Based on this logical vector, `filter()` then keeps only `TRUE` rows.
 ```{r, echo=FALSE}
-beforefilter <- nrow(cases_long)
+beforefilter <- nrow(incidence_long)
 ```
 
 
 ```{r}
 ## Filter out missing data,
-cases_long <- cases_long %>% filter(complete.cases(.))
+incidence_long <- incidence_long %>% filter(complete.cases(.))
 ## above is same as:
 ## filter(cases_long, complete.cases(cases_long))
+## omit.na(incidence_long)
 ```
 
-Before filtering missing values table had `r beforefilter` rows and after `r nrow(cases_long)`. 
-**Wow, looks that we don't have NA-s in our table!**
+Before filtering missing values table had `r beforefilter` rows and after `r nrow(incidence_long)`. 
+**Looks that we don't have any NA in our table!**
+
+That's all with data wrangling for now!
 
 ## Cancer trend in Estonia
 
@@ -278,11 +282,14 @@ It's quite simple, we have already summary data available in our table under var
 We plot this variable versus Years and for begginning we lump together men and women:.
 
 ```{r}
-total_cases_per_year <- cases_long %>% 
+total_cases_per_year <- incidence_long %>% 
   filter(Site == "All malignant neoplasms (C00-C97)") %>% 
   group_by(Year) %>% 
-  summarise(total_cases = sum(cases)) 
+  summarise(total_cases = sum(cases))
+total_cases_per_year
+```
 
+```{r}
 ## We direct plot to an object, then we can reuse it
 p <- total_cases_per_year %>% 
   ggplot(aes(Year, total_cases)) +
@@ -294,122 +301,173 @@ p <- total_cases_per_year %>%
 p
 ```
 
+We can see that cancer cases are skyrocketing.
 
-```{r, echo=FALSE}
-cases_range <- range(total_cases_per_year$total_cases)
-cases_range
-sprintf("%1.0f%%", round(diff(cases_range)/cases_range[1], 2)*100)
-```
-
-We can see that the number of new cases increased `r sprintf("%1.0f%%", round(diff(cases_range)/cases_range[1], 2)*100)` between 2000 to 2014, from `r paste(range(total_cases_per_year$total_cases), collapse = " to ")`.
-This means on average `r round(diff(cases_range)/length(total_cases_per_year$Year))` more tumors each year.
 To better examplify this trend, we can add linear model fit to the plot using `geom_smooth()` function from "ggplot2".
-Now we can perceive that cancer cases are rocketing into sky.
-This is because our plot y axis starts at 6000 and we have ommitted baseline from graph, we can put this increase into better perspective by adding `y = 0` to the plot.
+It is also good idea to start y-axis from 0 in order to decrease lie factor -- we might perceive trend larger than it actually is.
+
+We created ggplot object "p" in the previous code chunk, we can modify this ggplot object by adding new geoms:
 ```{r}
 p + 
   geom_smooth(method = "lm", se = FALSE) + 
   expand_limits(y = 0)
 ```
 
-
-
-Is the number of cases similar in males and females?
-Again, we look on the all cancers, but also group by Sex:
+Ok, trend is increasing, but how much increase have we seen compared 2014 to 2000?
 
 ```{r}
-total_cases_per_year_sex <- cases_long %>% 
+total_cases_per_year %>% 
+  filter(Year %in% c(2000, 2014)) %>% 
+  knitr::kable(col.names = c("Year", "Number of total cases"))
+```
+
+How many percent?
+
+```{r}
+total_cases_per_year %>% 
+  filter(Year %in% c(2000, 2014)) %>% 
+  summarise(perc_increase = sprintf("%1.0f%%", (1 - total_cases[Year==2000]/total_cases[Year==2014])*100))
+```
+
+
+**Is the number of cases similar in males and females?**
+Again, we look on the all types of cancer, but split dataset by Sex:
+
+```{r}
+## summarise data per Year and Sex
+total_cases_per_year_sex <- incidence_long %>% 
   filter(Site == "All malignant neoplasms (C00-C97)") %>% 
   group_by(Year, Sex) %>% 
   summarise(total_cases = sum(cases)) 
-## we give new data to plot and we also must supply aes for Sex
-p %+% total_cases_per_year_sex + aes(color = Sex)
+## Plot this new summary
+total_cases_per_year_sex %>% 
+  ggplot(aes(Year, total_cases, color = Sex)) +
+  geom_point() +
+  geom_line() +
+  ylab(label) +
+  ggtitle("All malignant neoplasms (C00-C97)",
+          subtitle = paste("Source:", data_source))
 ```
 
-We can see that cancer prevalence is similar in both gender.
+We can see that cancer prevalence seems to be similar in both gender -- the number of female and male cancer patients is similar.
+We might have some prior information, that there are more women than men in population.
+The question arises whether men and women still get cancer at the same rate?
 
-
-So we have seen on average `r round(diff(cases_range)/length(total_cases_per_year$Year))` more new cases each year during 2000 and 2014.
-
+So we have seen increasing numbers of new cases each year during 2000 and 2014.
 Do we have more cancer or does this reflects increase in population size?
 
-To answer this question, we need population size normalised values of cancer cases -- **incidence**.
+
+To answer these question, we need population size normalised values of cancer cases -- **incidence**.
 Cancer incidence is obtained by dividing cancer prevalence with population size.
 
 **Mean population data**.
 We obtained mean annual population data from Statistics Estonia.
 You can download this dataset from "[rstats-tartu/datasets](https://github.com/rstats-tartu/datasets)" repo.
 
-Download population data:
+Download population data into our projects "data" subfolder:
 ```{r, message=FALSE}
 url <- "https://raw.githubusercontent.com/rstats-tartu/datasets/master/mean_annual_population.csv"
-dir.create("data")
 download.file(url, "data/mean_annual_population.csv")
 ```
 
-Import mean annual population data. 
-Additionally, we need to summarise age groups "0" and "1-4" into "0-4".
-```{r, message=FALSE}
+Import mean annual population data.
+
+```{r}
 ## Read in data
 pop <- read_csv("data/mean_annual_population.csv")
+pop
+```
 
+We can see that population size data is in wide format and we have separate columns for age groups "0" and "1-4" that we don't have in our cancer data.
+In cancer data we have age group "0-4" instead.
+
+We need to summarise age groups "0" and "1-4" into "0-4", drop "0" and "1-4" and then convert table to long format using `gather()`.
+```{r}
 ## Summarise 0 and 1-4 to 0-4 age group, keep only the latter
-## You really need backticks..
 pop_long <- mutate(pop, "0-4" = `0` + `1-4`) %>% 
   select(-`0`, -`1-4`) %>% 
   gather("age", "ave_pop", matches("^[[:digit:]]"))
+pop_long
 ```
-
 
 Merge cancer prevalence data with population size into new dataframe "incidence":
 ```{r}
-incidence <- left_join(cases_long, pop_long)
+incidence_long <- left_join(incidence_long, pop_long)
+## For viewing we select only three columns
+select(incidence_long, age, cases, ave_pop)
 ```
 
+Cancer incidence is presented as new cases per 100'000.
 Now we have number of new cases and population size side-by-side and can go on to calculate cancer incidence per 100'000 inhabitans:
-```{r}
+```{r this}
 ## Calculate incidence per 100'000
-incidence_year_sex <-  incidence %>% 
+incidence_year_sex <- incidence_long %>% 
   group_by(Site, Year, Sex) %>% 
   summarise(cases = sum(cases),
             ave_pop = sum(ave_pop)) %>% 
   mutate(incidence = cases/(ave_pop/1E5))
-
-## To save typing, we create function to calculate incidence on grouped table
-calculate_incidence <- function(mytbl){
-  summarise(mytbl, cases = sum(cases),
-            ave_pop = sum(ave_pop)) %>% 
-    mutate(incidence = cases/(ave_pop/1E5))
-}
+## we selected less columns for viewing
+select(incidence_year_sex, Site, Year, incidence, everything())
 ```
 
 
-**Men get more cancer in Estonia.** Clearly, increasing trend for new cancer cases is still visible after normalisation for population size. 
+
+Let's see if we got correct number by comparing our incidence numbers to ones published in [Estonian Health Statistics database]( http://pxweb.tai.ee/PXWeb2015/pxweb/en/02Haigestumus/02Haigestumus__04Pahaloomulised%20kasvajad/PK30.px/table/tableViewLayout2/?rxid=99c3b4bb-c5a7-466d-9f66-2744870afcd7):
+
+
+```{r}
+incidence_year_sex %>% 
+  filter(Site == "All malignant neoplasms (C00-C97)",
+         Year == 2000) %>% 
+  select(-Site, -cases, -ave_pop) %>% 
+  knitr::kable()
+```
+
+
+
+```{r, fig.cap="Cancer incidence values of All malignant neoplasms for year 2000 in Estonian Health Statistics database."}
+knitr::include_graphics("img/verify_incidence.png")
+```
+
+<br>
+
+>Seems that we are calculating cancer incidence similarly as professional statiticians.
+
+<br>
+
+**Men get more cancer in Estonia.** 
+Clearly, increasing trend for new cancer cases is still visible after normalisation for population size. 
 However, incidence uncovers another important trend, namely, men tend to get more cancer than women in Estonia.
 While the number of cases per year was similar in men and women, the incidence is higher in men:
 ```{r}
 total_incidence_year_sex <- incidence_year_sex %>% 
   filter(Site == "All malignant neoplasms (C00-C97)")
 ## we give new data to plot and we also must supply aes for Sex
-p %+% total_incidence_year_sex + 
-  aes(y = incidence, color = Sex) +
-  ylab("Cancer incidence per 100'000")
+total_incidence_year_sex %>% 
+  ggplot(aes(Year, incidence, color = Sex)) +
+  geom_point() +
+  geom_line() +
+  ylab("Cancer incidence per 100'000") +
+  ggtitle("All malignant neoplasms (C00-C97)",
+          subtitle = paste("Source:", data_source))
 ```
 
 Is increasing incidence trend comparable to the increase in number of cases? 
 We can try to look at this by calculating percent increase in 2014 compared to 2000.
-Do we get more cancer or do we diagnose more cancer... ?
 ```{r, echo=FALSE}
 ## here we use again min and max as proxies to year 2000 and 2014, respectively
-incidence_range <- total_incidence_year_sex %>% 
-  group_by(Sex) %>% 
+incidence_range <- total_incidence_year_sex %>%
+  filter(Year %in% c(2000, 2014)) %>% 
+  group_by(Sex) %>%
   summarise(Min = round(min(incidence)),
             Max = round(max(incidence)),
-            increase = sprintf("%1.0f%%", (Max-Min)*100/Min))
+            increase = sprintf("%1.0f%%", (1 - Min / Max) * 100))
 knitr::kable(incidence_range, col.names = c("Sex", "2000", "2014", "Increase"))
 ```
 
-We can see that compared to counts both men and women show even bigger increase in cancer rates in Estonia. 
+We can see that compared to counts of new cases both men and women show even bigger increase in cancer rates in Estonia. 
+Do we get more cancer or do we diagnose more cancer... ?
+
 
 >We can settle that cancer trend in Estonia is worryingly increasing.
 
@@ -420,10 +478,12 @@ Which age groups get most cancer? Number of new cases versus incidence.
 Let's have a look on top20 most frequent cancers, by number of cases or incidence.
 First, we remove two summary variables from table -- "All malignant neoplasms (C00-C97)" and "All malignant neoplasms except skin (other) (C00-C97, except C44)".
 ```{r}
-incidence <- filter(incidence, !str_detect(Site, "All malignant"))
-incidence_year_site_sex <- incidence %>% 
+incidence_long <- filter(incidence_long, !str_detect(Site, "All malignant"))
+incidence_year_site_sex <- incidence_long %>% 
   group_by(Year, Site, Sex) %>% 
-  calculate_incidence() 
+  summarise(cases = sum(cases),
+            ave_pop = sum(ave_pop)) %>% 
+  mutate(incidence = cases/(ave_pop/1E5))
 
 mutate_at(incidence_year_site_sex, vars(cases, incidence), mean) %>% 
   ungroup %>% 
