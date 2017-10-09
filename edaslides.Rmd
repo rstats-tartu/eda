@@ -1,0 +1,137 @@
+---
+title: "Exploratory data analysis"
+author: "Taavi Päll"
+date: 27\. september 2017
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+---
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+```
+
+## EDA
+Exploratory data analysis is iterative process* where you:
+
+1. Generate questions about your data.
+
+2. Search for answers by visualising, transforming, and modelling your data.
+
+3. Use what you learn to refine your questions and/or generate new questions.
+
+.footnote[
+*Wickham, Hadley, and Garrett Grolemund. 2017. “R for Data Science.” O’Reilly Media. http://r4ds.had.co.nz.
+]
+
+---
+class:inverse, middle
+
+- EDA **is not** a formal process with a strict set of rules.
+
+- You should feel free to investigate every idea that occurs to you.
+
+- EDA is an important part of any data analysis because you always need to investigate the quality of your data.
+
+---
+
+## WHO cancer facts 
+
+- Cancer and specially lung cancer is becoming one of the leading causes of mortality.
+
+- In year 2012. cancer claimed 8.2 million lives worldwide, European Union had 15% share (1.27 million).
+
+- Most cancer deaths are caused by lung-, liver-, stomach-, colorectal-, and breast cancer.
+
+- Most frequent cancer types are different in females and males.
+
+- Predictions show that cancer incidence increases from 14 million in 2012. to 22 million in 2030-ties.
+
+---
+
+## Questions
+By using Estonian cancer incidence data we want to understand:
+
+1. **What is the cancer incidence trend in Estonia?**
+
+2. **What are the most frequent cancer sites?**
+
+3. **What is the most frequent cancer type in men and in women?**
+
+---
+
+## Cancer data from Estonian Cancer Registry
+
+- Estonian cancer registry data is available via [Health statistics and health research database](http://pxweb.tai.ee/PXWeb2015/pxweb/en/02Haigestumus/02Haigestumus__04Pahaloomulised%20kasvajad/?tablelist=true&rxid=279523e2-1ea1-4a02-920b-f85bb19a908d).
+- We are using cancer incidence dataset from table "PK10: New cases of malignant neoplasms by specified site, sex and age group".
+- Detailed information about variables in this dataset can be found from [here](http://pxweb.tai.ee/PXWeb2015/Resources/PX/Databases/02Haigestumus/04Pahaloomulised%20kasvajad/PKinfo_en.htm).
+
+
+```{r,echo=FALSE,fig.cap="Screen caption from dataset download page. Note that data was downloaded in JSON format.",out.width=360, fig.align='center'}
+knitr::include_graphics("img/pk10-page.png")
+```
+
+---
+
+## Download PK10 dataset
+
+- This dataset is available on https://github.com/rstats-tartu/datasets
+
+```{r, eval=FALSE}
+## url to file
+url <- "https://raw.githubusercontent.com/rstats-tartu/datasets/master/cancer_newcases_PK10.json"
+
+## issues warning when dir exists
+dir.create("data")
+
+## download data
+download.file(url, "data/cancer_incidence_PK10.json")
+```
+
+---
+
+## Load libraries
+
+- First we load "tidyverse" library. 
+
+- We are going to need also "stringi" and "stringr" libraries for string manipulation.
+
+- "broom" package converts S3 model object into dataframes for tidy handling.
+
+```{r, message=FALSE}
+library(tidyverse)
+library(stringi)
+library(stringr)
+library(broom)
+```
+
+---
+
+## Import and prepare data
+
+We import dataset using `json_to_df()` function from "boulder" library. 
+
+You can install "boulder" from github "[tpall/boulder](https://github.com/tpall/boulder)":
+"boulder" package has few helper functions and was created to work specificly with Estonian Health Statistics and Health Research Database.
+However, "boulder" package is still under development and you should use it carefully.
+
+```{r}
+# devtools::install_github("tpall/boulder")
+library(boulder)
+path <- "data/cancer_newcases_PK10.json"
+cases <- json_to_df(path)
+```
+
+---
+
+```{r}
+filter(cases, str_length(`Specified site`)<20) # see note
+```
+
+.footnote[
+For better overview we filtered out long Specified site values.
+]

@@ -228,8 +228,9 @@ $(document).ready(function () {
 </ol>
 <p><br></p>
 <blockquote>
-<p>However, when doing data analysis 80% of time will be spent on data wrangling where you also become familiar with your dataset. So it’s time well spent.</p>
+<p>When doing data analysis 80% of time will be spent on data wrangling where you also become familiar with your dataset. So it’s time well spent.</p>
 </blockquote>
+<p>You must be aware that when looking at your data and searcing for something interesting is multiple hypothesis testing and you need to adjust your expectations.</p>
 </div>
 <div id="cancer-data-from-estonian-cancer-registry" class="section level2">
 <h2>Cancer data from Estonian cancer registry</h2>
@@ -300,6 +301,8 @@ incidence &lt;- json_to_df(&quot;data/cancer_newcases_PK10.json&quot;)</code></p
 ## #   `55-59` &lt;int&gt;, `60-64` &lt;int&gt;, `65-69` &lt;int&gt;, `70-74` &lt;int&gt;,
 ## #   `75-79` &lt;int&gt;, `80-84` &lt;int&gt;, `85 and older` &lt;int&gt;, label &lt;chr&gt;,
 ## #   source &lt;chr&gt;, updated &lt;chr&gt;</code></pre>
+<p>We have columns “Year”, “Specified site”, “Sex”, age groups from “0-4” to “85 and older”, “label”, “source”, “update”.</p>
+<p>“Specified site” indicates the anatomical site of the cancer followed by ICD-10 code in parentheses (there is ICD-10 code for “Burned when water skis caught on fire: Y91.07XA” or “V97.33XD Sucked into jet engine, subsequent encounter”).</p>
 <p>For better overview let’s filter out “Specified site” values that are longer than 30 characters.</p>
 <pre class="r"><code>filter(incidence, str_length(`Specified site`) &lt; 30)</code></pre>
 <pre><code>## # A tibble: 1,110 x 24
@@ -450,7 +453,7 @@ incidence_long</code></pre>
 ## 10  2000 Women
 ## # ... with 39,410 more rows, and 3 more variables: Site &lt;chr&gt;, age &lt;chr&gt;,
 ## #   cases &lt;int&gt;</code></pre>
-<p>Now we have each value on separate row and can filter out missing values. Currently missing values are expicitly labeled with NA-s. Function <code>complete.cases()</code> gives logical vector indicating rows with no missing values (no NA-s). Based on this logical vector, <code>filter()</code> then keeps only <code>TRUE</code> rows.</p>
+<p>Now we have each value on separate row and can filter out missing values. Currently missing values are explicitly labeled with NA-s. Function <code>complete.cases()</code> gives logical vector indicating rows with no missing values (no NA-s). Based on this logical vector, <code>filter()</code> then keeps only <code>TRUE</code> rows.</p>
 <pre class="r"><code>## Filter out missing data,
 incidence_long &lt;- incidence_long %&gt;% filter(complete.cases(.))
 ## above is same as:
@@ -494,14 +497,14 @@ p &lt;- total_cases_per_year %&gt;%
   ggtitle(&quot;All malignant neoplasms (C00-C97)&quot;,
           subtitle = paste(&quot;Source:&quot;, data_source))
 p</code></pre>
-<p><img src="index_files/figure-html/unnamed-chunk-16-1.png" width="672" /></p>
+<p><img src="index_files/figure-html/unnamed-chunk-16-1.svg" width="672" /></p>
 <p>We can see that cancer cases are skyrocketing.</p>
 <p>To better examplify this trend, we can add linear model fit to the plot using <code>geom_smooth()</code> function from “ggplot2”. It is also good idea to start y-axis from 0 in order to decrease lie factor – we might perceive trend larger than it actually is.</p>
 <p>We created ggplot object “p” in the previous code chunk, we can modify this ggplot object by adding new geoms:</p>
 <pre class="r"><code>p + 
   geom_smooth(method = &quot;lm&quot;, se = FALSE) + 
   expand_limits(y = 0)</code></pre>
-<p><img src="index_files/figure-html/unnamed-chunk-17-1.png" width="672" /></p>
+<p><img src="index_files/figure-html/unnamed-chunk-17-1.svg" width="672" /></p>
 <p>Ok, trend is increasing, but how much increase have we seen compared 2014 to 2000?</p>
 <pre class="r"><code>total_cases_per_year %&gt;% 
   filter(Year %in% c(2000, 2014)) %&gt;% 
@@ -546,14 +549,22 @@ total_cases_per_year_sex %&gt;%
   ylab(label) +
   ggtitle(&quot;All malignant neoplasms (C00-C97)&quot;,
           subtitle = paste(&quot;Source:&quot;, data_source))</code></pre>
-<p><img src="index_files/figure-html/unnamed-chunk-20-1.png" width="672" /></p>
+<p><img src="index_files/figure-html/unnamed-chunk-20-1.svg" width="672" /></p>
 <p>We can see that cancer prevalence seems to be similar in both gender – the number of female and male cancer patients is similar. We might have some prior information, that there are more women than men in population. The question arises whether men and women still get cancer at the same rate?</p>
 <p>So we have seen increasing numbers of new cases each year during 2000 and 2014. Do we have more cancer or does this reflects increase in population size?</p>
 <p>To answer these question, we need population size normalised values of cancer cases – <strong>incidence</strong>. Cancer incidence is obtained by dividing cancer prevalence with population size.</p>
-<p><strong>Mean population data</strong>. We obtained mean annual population data from Statistics Estonia. You can download this dataset from “<a href="https://github.com/rstats-tartu/datasets">rstats-tartu/datasets</a>” repo.</p>
+<p><strong>incidence = (number of cases / mean annual population) * 100000</strong></p>
+<p>Vähi intsidents on uute mingit tüüpi vähijuhtude arv aastas vastavas populatsioonis. Uute juhtude arv võib sisaldada mitmeid ühelt patsiendilt leitud primaarseid vähikoldeid. Primaarne vähisait on see kustkohas see vähk algselt on tekkinud, mitte metastaas. Intsidents ei sisalda tagasi tulnud vähke. Populatsiooni suurus sõltub missugusele kasvajale või kasvajagrupile intsidentsi arvutatakse. Kui näiteks arvutatakse emakakaela vähi intsidentsi, siis kasutatakse ainult naiste populatsiooni suurust.</p>
+<p>Vanusrühmade suuruse suhtes kaalutud intsidents ehk vanuskordajad arvutatakse kaalutud keskmise meetodil, kus kaalud saadakse vanuserühmade suurusest.</p>
+</div>
+<div id="vanuserahmade-suuruse-suhtes-kaalutud-vahi-intsidents" class="section level2">
+<h2>Vanuserähmade suuruse suhtes kaalutud vähi intsidents</h2>
+<p>Vähi vanuskordajate arvutamiseks on meil puudu populatsioonisuurused.</p>
+<p>We obtained mean annual population data from Statistics Estonia. You can download this dataset from “<a href="https://github.com/rstats-tartu/datasets">rstats-tartu/datasets</a>” repo.</p>
 <p>Download population data into our projects “data” subfolder:</p>
-<pre class="r"><code>url &lt;- &quot;https://raw.githubusercontent.com/rstats-tartu/datasets/master/mean_annual_population.csv&quot;
-download.file(url, &quot;data/mean_annual_population.csv&quot;)</code></pre>
+<pre class="r"><code>if(!file.exists(&quot;data/mean_annual_population.csv&quot;)){
+  download.file(&quot;https://raw.githubusercontent.com/rstats-tartu/datasets/master/mean_annual_population.csv&quot;, &quot;data/mean_annual_population.csv&quot;)
+}</code></pre>
 <p>Import mean annual population data.</p>
 <pre class="r"><code>## Read in data
 pop &lt;- read_csv(&quot;data/mean_annual_population.csv&quot;)</code></pre>
@@ -602,32 +613,31 @@ pop_long</code></pre>
 ##  9   Men  1978   5-9   55384
 ## 10   Men  1979   5-9   55816
 ## # ... with 1,682 more rows</code></pre>
-<p>Merge cancer prevalence data with population size into new dataframe “incidence”:</p>
+<p>Merge cancer cases with population size data. Note that population values only from years 2000 to 2014 will be merged to incidence_long.</p>
 <pre class="r"><code>incidence_long &lt;- left_join(incidence_long, pop_long)</code></pre>
 <pre><code>## Joining, by = c(&quot;Year&quot;, &quot;Sex&quot;, &quot;age&quot;)</code></pre>
-<pre class="r"><code>## For viewing we select only three columns
-select(incidence_long, age, cases, ave_pop)</code></pre>
-<pre><code>## # A tibble: 39,420 x 3
-##      age cases ave_pop
-##    &lt;chr&gt; &lt;int&gt;   &lt;int&gt;
-##  1   0-4     6   32355
-##  2   0-4     8   30455
-##  3   0-4     6   32355
-##  4   0-4     8   30455
-##  5   0-4     0   32355
-##  6   0-4     1   30455
-##  7   0-4     0   32355
-##  8   0-4     0   30455
-##  9   0-4     0   32355
-## 10   0-4     0   30455
-## # ... with 39,410 more rows</code></pre>
+<pre class="r"><code>incidence_long</code></pre>
+<pre><code>## # A tibble: 39,420 x 6
+##     Year   Sex
+##    &lt;dbl&gt; &lt;chr&gt;
+##  1  2000   Men
+##  2  2000 Women
+##  3  2000   Men
+##  4  2000 Women
+##  5  2000   Men
+##  6  2000 Women
+##  7  2000   Men
+##  8  2000 Women
+##  9  2000   Men
+## 10  2000 Women
+## # ... with 39,410 more rows, and 4 more variables: Site &lt;chr&gt;, age &lt;chr&gt;,
+## #   cases &lt;int&gt;, ave_pop &lt;int&gt;</code></pre>
 <p>Cancer incidence is presented as new cases per 100’000. Now we have number of new cases and population size side-by-side and can go on to calculate cancer incidence per 100’000 inhabitans:</p>
-<pre class="r"><code>## Calculate incidence per 100&#39;000
-incidence_year_sex &lt;- incidence_long %&gt;% 
+<pre class="r"><code>incidence_year_sex &lt;- incidence_long %&gt;% 
   group_by(Site, Year, Sex) %&gt;% 
   summarise(cases = sum(cases),
             ave_pop = sum(ave_pop)) %&gt;% 
-  mutate(incidence = cases/(ave_pop/1E5))
+  mutate(incidence = (cases / ave_pop) * 100000)
 ## we selected less columns for viewing
 select(incidence_year_sex, Site, Year, incidence, everything())</code></pre>
 <pre><code>## # A tibble: 2,190 x 6
@@ -699,28 +709,22 @@ total_incidence_year_sex %&gt;%
   ylab(&quot;Cancer incidence per 100&#39;000&quot;) +
   ggtitle(&quot;All malignant neoplasms (C00-C97)&quot;,
           subtitle = paste(&quot;Source:&quot;, data_source))</code></pre>
-<p><img src="index_files/figure-html/unnamed-chunk-27-1.png" width="672" /></p>
+<p><img src="index_files/figure-html/unnamed-chunk-27-1.svg" width="672" /></p>
 <p>Is increasing incidence trend comparable to the increase in number of cases? We can try to look at this by calculating percent increase in 2014 compared to 2000.</p>
 <table>
 <thead>
 <tr class="header">
 <th align="left">Sex</th>
-<th align="right">2000</th>
-<th align="right">2014</th>
 <th align="left">Increase</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td align="left">Men</td>
-<td align="right">448</td>
-<td align="right">693</td>
 <td align="left">35%</td>
 </tr>
 <tr class="even">
 <td align="left">Women</td>
-<td align="right">417</td>
-<td align="right">614</td>
 <td align="left">32%</td>
 </tr>
 </tbody>
@@ -729,7 +733,6 @@ total_incidence_year_sex %&gt;%
 <blockquote>
 <p>We can settle that cancer trend in Estonia is worryingly increasing.</p>
 </blockquote>
-<p>Which age groups get most cancer? Number of new cases versus incidence.</p>
 </div>
 <div id="what-are-the-most-frequent-cancer-sites" class="section level2">
 <h2>What are the most frequent cancer sites?</h2>
@@ -737,31 +740,93 @@ total_incidence_year_sex %&gt;%
 <p>First, we try to remove some summary variables from table. “boulder” package has <em>adhoc</em> function <code>icd_sums()</code> that tries to id rows that contain summary data over many cancer sites using ICD codes in “Sites” strings.</p>
 <pre class="r"><code>## boulder has adhoc function that tries to id parent Sites
 parent_nodes &lt;- boulder::icd_sums(unique(incidence_long$Site))
-unique_parents &lt;- unique(parent_nodes$Parent)</code></pre>
+parent_nodes</code></pre>
+<pre><code>## # A tibble: 181 x 2
+##                               Parent
+##                                &lt;chr&gt;
+##  1 All malignant neoplasms (C00-C97)
+##  2 All malignant neoplasms (C00-C97)
+##  3 All malignant neoplasms (C00-C97)
+##  4 All malignant neoplasms (C00-C97)
+##  5 All malignant neoplasms (C00-C97)
+##  6 All malignant neoplasms (C00-C97)
+##  7 All malignant neoplasms (C00-C97)
+##  8 All malignant neoplasms (C00-C97)
+##  9 All malignant neoplasms (C00-C97)
+## 10 All malignant neoplasms (C00-C97)
+## # ... with 171 more rows, and 1 more variables: Site &lt;chr&gt;</code></pre>
+<p>Create vector for subsetting:</p>
+<pre class="r"><code>unique_parents &lt;- unique(parent_nodes$Parent)</code></pre>
+<blockquote>
 <p>This can be also achieved by “manually” specifying Site values to be omitted.</p>
+</blockquote>
+</div>
+<div id="find-most-frequent-cancer-sites" class="section level2">
+<h2>Find most frequent cancer sites</h2>
 <p>We calculate incidence for each Site per Sex, let’s drop Year by taking its average:</p>
 <pre class="r"><code>incidence_sex_filt &lt;- incidence_year_sex %&gt;% 
   filter(!Site %in% unique_parents) %&gt;% 
   group_by(Site, Sex) %&gt;% 
-  summarise(incidence = mean(incidence))</code></pre>
+  summarise(incidence = mean(incidence))
+incidence_sex_filt</code></pre>
+<pre><code>## # A tibble: 120 x 3
+## # Groups:   Site [?]
+##                                      Site   Sex  incidence
+##                                     &lt;chr&gt; &lt;chr&gt;      &lt;dbl&gt;
+##  1  Acute lymphoblastic leukaemia (C91.0)   Men  1.2020502
+##  2  Acute lymphoblastic leukaemia (C91.0) Women  1.0957165
+##  3        Acute myeloid leukaemia (C92.0)   Men  2.8776086
+##  4        Acute myeloid leukaemia (C92.0) Women  3.0853415
+##  5                          Bladder (C67)   Men 25.7340246
+##  6                          Bladder (C67) Women  8.1800575
+##  7 Bone and articular cartilage (C40-C41)   Men  1.3889258
+##  8 Bone and articular cartilage (C40-C41) Women  0.7791062
+##  9                            Brain (C71)   Men  7.4869174
+## 10                            Brain (C71) Women  6.4476983
+## # ... with 110 more rows</code></pre>
 <p>List of top10 cancers by Sex:</p>
 <pre class="r"><code>## list of top10 cancers
 listof_top10 &lt;- incidence_sex_filt %&gt;% 
   group_by(Sex) %&gt;% 
   top_n(10, incidence) %&gt;% 
-  arrange(desc(incidence))</code></pre>
+  arrange(desc(incidence))
+listof_top10</code></pre>
+<pre><code>## # A tibble: 20 x 3
+## # Groups:   Sex [2]
+##                                   Site   Sex incidence
+##                                  &lt;chr&gt; &lt;chr&gt;     &lt;dbl&gt;
+##  1                      Prostate (C61)   Men 133.08185
+##  2   Trachea, bronchus, lung (C33-C34)   Men  96.15237
+##  3                        Breast (C50) Women  90.47996
+##  4                 Skin (others) (C44) Women  79.09734
+##  5                 Skin (others) (C44)   Men  53.96362
+##  6                         Colon (C18) Women  37.59027
+##  7                       Stomach (C16)   Men  36.43324
+##  8                         Colon (C18)   Men  32.33435
+##  9                  Corpus uteri (C54) Women  28.24725
+## 10      Kidney, renal pelvis (C64-C65)   Men  26.95186
+## 11                       Stomach (C16) Women  26.42107
+## 12                       Bladder (C67)   Men  25.73402
+## 13         Rectum and others (C19-C21)   Men  24.95321
+## 14   Trachea, bronchus, lung (C33-C34) Women  24.40774
+## 15                  Cervix uteri (C53) Women  24.26342
+## 16                         Ovary (C56) Women  21.94703
+## 17         Rectum and others (C19-C21) Women  21.76053
+## 18                      Pancreas (C25)   Men  18.00857
+## 19      Kidney, renal pelvis (C64-C65) Women  17.12987
+## 20 Non-Hodgkin&#39;s lymphoma (C82-C85/96)   Men  12.27523</code></pre>
 <p>Plot most frequent cancers:</p>
 <pre class="r"><code>incidence_sex_filt %&gt;% 
   filter(Site %in% listof_top10$Site) %&gt;% 
   ggplot(aes(Sex, incidence)) +
-  geom_bar(stat = &quot;identity&quot;) +
-  facet_wrap(~ Site) +
+  geom_bar(stat = &quot;identity&quot;) + ## use the values that we have in our table
+  facet_wrap(~ Site, labeller = label_wrap_gen(width = 20)) +
   labs(title = &quot;Top10 cancer sites from both genders&quot;,
        subtitle = &quot;Mean annual incidence from years 2000 to 2014&quot;,
        y = &quot;Cancer incidence per 100000&quot;,
        caption = paste(&quot;Source:&quot;, data_source)) +
   theme(axis.title.x = element_blank())</code></pre>
-<p><img src="index_files/figure-html/unnamed-chunk-32-1.png" width="672" /></p>
+<p><img src="index_files/figure-html/unnamed-chunk-33-1.svg" width="672" /></p>
 <p>Here is another take using the same data:</p>
 <pre class="r"><code>incidence_sex_filt %&gt;%
   filter(Site %in% listof_top10$Site) %&gt;% 
@@ -775,18 +840,156 @@ listof_top10 &lt;- incidence_sex_filt %&gt;%
   theme(axis.title.y = element_blank(),
         legend.title = element_blank()) +
   scale_fill_manual(values = c(&quot;darkgray&quot;, &quot;orange&quot;))</code></pre>
-<p><img src="index_files/figure-html/unnamed-chunk-33-1.png" width="672" /></p>
+<p><img src="index_files/figure-html/unnamed-chunk-34-1.svg" width="672" /></p>
 <p>What these two graphs tell us?</p>
 </div>
-<div id="age-groups" class="section level2">
-<h2>Age groups</h2>
+<div id="cancer-takes-whole-life-to-develop" class="section level2">
+<h2>Cancer takes whole life to develop</h2>
+<p>Which age groups get most cancer? Number of new cases versus incidence.</p>
+<p>First, we also make age groups numeric for correct x-axis order.</p>
+<pre class="r"><code>numeric_agegroup &lt;- function(x) parse_number(str_extract(x, &quot;^[0-9]{1,2}&quot;))
+incidence_long &lt;- incidence_long %&gt;% mutate_at(&quot;age&quot;, numeric_agegroup)
+incidence_long</code></pre>
+<pre><code>## # A tibble: 39,420 x 6
+##     Year   Sex
+##    &lt;dbl&gt; &lt;chr&gt;
+##  1  2000   Men
+##  2  2000 Women
+##  3  2000   Men
+##  4  2000 Women
+##  5  2000   Men
+##  6  2000 Women
+##  7  2000   Men
+##  8  2000 Women
+##  9  2000   Men
+## 10  2000 Women
+## # ... with 39,410 more rows, and 4 more variables: Site &lt;chr&gt;, age &lt;dbl&gt;,
+## #   cases &lt;int&gt;, ave_pop &lt;int&gt;</code></pre>
+<p>Let’s plot cancer incidence versus age groups.</p>
+<pre class="r"><code>p &lt;- incidence_long %&gt;% 
+  filter(Site %in% listof_top10$Site) %&gt;%
+  mutate(incidence = (cases / ave_pop) * 100000) %&gt;% 
+  group_by(Sex, Site, age) %&gt;% 
+  summarise(incidence = mean(incidence)) %&gt;% 
+  ggplot(aes(age, incidence, color = Sex)) +
+  geom_line() +
+  facet_wrap(~ Site, labeller = label_wrap_gen(20), scales = &quot;free_y&quot;) +
+  scale_color_manual(values = c(&quot;darkgray&quot;, &quot;orange&quot;))
+p</code></pre>
+<p><img src="index_files/figure-html/unnamed-chunk-36-1.svg" width="672" /> We can see that generally cancer incidence peaks at the age of 60+. There are exeptions, like cervical cancer which has peak incidence in 40 year olds.</p>
+<p>Cancer incidence increases with age: use log on x and y axis!</p>
+<pre class="r"><code>incidence_long %&gt;% 
+  filter(Site %in% listof_top10$Site) %&gt;%
+  mutate(incidence = cases / (ave_pop/1E5)) %&gt;% 
+  group_by(Sex, Site, age) %&gt;% 
+  summarise(incidence = mean(incidence)) %&gt;% 
+  mutate_at(vars(age, incidence), log) %&gt;% 
+  filter(is.finite(incidence), is.finite(age)) %&gt;% 
+  ggplot(aes(age, incidence, color = Sex)) +
+  geom_point() +
+  facet_wrap(~ Site, labeller = label_wrap_gen(20), scales = &quot;free_y&quot;) +
+  scale_color_manual(values = c(&quot;darkgray&quot;, &quot;orange&quot;)) +
+  geom_smooth(method = &quot;lm&quot;)</code></pre>
+<p><img src="index_files/figure-html/unnamed-chunk-37-1.svg" width="672" /></p>
+<p>There are cancer that show linear relationship between age and incidence, like skin cancer and bladder cancer. And there are cancers that initially show increase but then reach plateau, these seem to be mostly gender specific cancers like breast cancer, cervical cancer, and endometrial cancer in women and prostate cancer in men. If you compare breast cancer in women and men, then it seems that they have different mechanism…</p>
 </div>
-</div>
-<div id="references" class="section level1 unnumbered">
-<h1>References</h1>
+<div id="weighted-averages" class="section level2">
+<h2>Weighted averages</h2>
+<p>Previous calculation we summarised all age groups to calculate cancer total population incidence. However, age groups in population are of different size and different cancer prevalence.</p>
+<p>Let’s try to take into account age-dependent differences in population size when calculating incidence – by population size as weight.</p>
+<p>Plot population sizes of different age groups:</p>
+<pre class="r"><code>## install.packages(&quot;viridis&quot;)
+library(viridis)</code></pre>
+<pre><code>## Loading required package: viridisLite</code></pre>
+<pre class="r"><code>## Plot age group differences
+incidence_long %&gt;% 
+  ungroup() %&gt;% 
+  select(Year, age, Sex, ave_pop) %&gt;%
+  distinct() %&gt;% 
+  ggplot(aes(age, ave_pop, color = Sex, group = Sex)) +
+  geom_jitter(jitter = 0.1) +
+  geom_smooth(method = &quot;loess&quot;, se = FALSE) +
+  labs(title = &quot;Population sizes of different age groups in Estonia&quot;,
+       subtitle = &quot;Years 2000 to 2014&quot;,
+       caption = &quot;Data: Statistics Estonia.&quot;,
+       y = &quot;Mean annual population&quot;,
+       x = &quot;Age groups&quot;) +
+  scale_color_viridis(discrete = TRUE)</code></pre>
+<pre><code>## Warning: Ignoring unknown parameters: jitter</code></pre>
+<p><img src="index_files/figure-html/unnamed-chunk-38-1.svg" width="672" /></p>
+<p>Let’s calculate age group size weighted incidence values. For comparison, first we recalculate raw incidence and then age-weighted incidence. To calculate raw incidence, we first sum up all cases and population size over age groups. Then we drop Year by calculating mean incidence across years.</p>
+<pre class="r"><code>## raw incidence
+raw_incidence &lt;- incidence_long %&gt;% 
+  group_by(Year, Site, Sex) %&gt;% 
+  summarise(cases = sum(cases),
+            ave_pop = sum(ave_pop)) %&gt;% 
+  mutate(incidence = (cases / ave_pop) * 100000) %&gt;% ## incidence
+  group_by(Site, Sex) %&gt;% 
+  summarise(incidence = mean(incidence),
+            ave_pop = mean(ave_pop))
+raw_incidence</code></pre>
+<pre><code>## # A tibble: 146 x 4
+## # Groups:   Site [?]
+##                                                                 Site   Sex
+##                                                                &lt;chr&gt; &lt;chr&gt;
+##  1                             Acute lymphoblastic leukaemia (C91.0)   Men
+##  2                             Acute lymphoblastic leukaemia (C91.0) Women
+##  3                                   Acute myeloid leukaemia (C92.0)   Men
+##  4                                   Acute myeloid leukaemia (C92.0) Women
+##  5                                               Adrenal gland (C74)   Men
+##  6                                               Adrenal gland (C74) Women
+##  7                                 All malignant neoplasms (C00-C97)   Men
+##  8                                 All malignant neoplasms (C00-C97) Women
+##  9 All malignant neoplasms except skin (other) (C00-C97, except C44)   Men
+## 10 All malignant neoplasms except skin (other) (C00-C97, except C44) Women
+## # ... with 136 more rows, and 2 more variables: incidence &lt;dbl&gt;,
+## #   ave_pop &lt;dbl&gt;</code></pre>
+<p>In order to calculate age-weighted incidence we should follow diferent logic. Here we start by calculating incidence for each data split in our table: Year, Site, Sex, age. Then we go on and calculate mean incidence and average pop size across Years. Then we apply weights and calculate weighted average.</p>
+<pre class="r"><code>## Age weighted incidence
+age_weighted_incidence &lt;- incidence_long %&gt;% 
+  mutate(incidence = (cases / ave_pop) * 100000) %&gt;% ## incidence
+  group_by(Site, Sex, age) %&gt;% ## calculate mean population size and mean incidence across years
+  summarise(incidence = mean(incidence), 
+            ave_pop = mean(ave_pop)) %&gt;% 
+  mutate(wt = ave_pop / sum(ave_pop), ## calculate and apply weights
+         incidence = wt * incidence) %&gt;% 
+  summarise(incidence = sum(incidence), ## calulate weighted average
+            ave_pop = sum(ave_pop))
+age_weighted_incidence</code></pre>
+<pre><code>## # A tibble: 146 x 4
+## # Groups:   Site [?]
+##                                                                 Site   Sex
+##                                                                &lt;chr&gt; &lt;chr&gt;
+##  1                             Acute lymphoblastic leukaemia (C91.0)   Men
+##  2                             Acute lymphoblastic leukaemia (C91.0) Women
+##  3                                   Acute myeloid leukaemia (C92.0)   Men
+##  4                                   Acute myeloid leukaemia (C92.0) Women
+##  5                                               Adrenal gland (C74)   Men
+##  6                                               Adrenal gland (C74) Women
+##  7                                 All malignant neoplasms (C00-C97)   Men
+##  8                                 All malignant neoplasms (C00-C97) Women
+##  9 All malignant neoplasms except skin (other) (C00-C97, except C44)   Men
+## 10 All malignant neoplasms except skin (other) (C00-C97, except C44) Women
+## # ... with 136 more rows, and 2 more variables: incidence &lt;dbl&gt;,
+## #   ave_pop &lt;dbl&gt;</code></pre>
+<p>Plot results side by side.</p>
+<pre class="r"><code>library(viridis)
+bind_rows(list(raw_incidence, age_weighted_incidence), .id = &quot;type&quot;) %&gt;% 
+  filter(Site %in% listof_top10$Site) %&gt;%
+  ggplot(aes(Sex, incidence, fill = type)) +
+  geom_bar(stat = &quot;identity&quot;, position = &quot;dodge&quot;) +
+  facet_wrap(~ Site, labeller = label_wrap_gen(20), scales = &quot;free_y&quot;) +
+  scale_fill_viridis(discrete = TRUE, labels = c(&quot;Raw&quot;, &quot;Age-\nweighted&quot;), &quot;Incidence&quot;) +
+  labs(y = &quot;Cancer incidence per 100,000&quot;,
+       title = &quot;Top10 cancer sites from both genders&quot;,
+       subtitle = &quot;Mean annual incidence from years 2000 to 2014&quot;,
+       caption = paste(&quot;Data:&quot;, data_source))</code></pre>
+<p><img src="index_files/figure-html/unnamed-chunk-41-1.svg" width="672" /></p>
+<p>As can be seen, these values are in our case virtually similar.</p>
 <div id="refs" class="references">
 <div id="ref-wickham2017r">
 <p>Wickham, Hadley, and Garrett Grolemund. 2017. “R for Data Science.” O’Reilly Media. http://r4ds.had.co.nz.</p>
+</div>
 </div>
 </div>
 </div>

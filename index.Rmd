@@ -9,7 +9,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, dev = 'svg')
 ```
 
 # Introduction
@@ -57,7 +57,10 @@ By using cancer incidence data from Estonian Cancer Registry we want to understa
 <br>
 
 
-> However, when doing data analysis 80% of time will be spent on data wrangling where you also become familiar with your dataset. So it's time well spent.
+> When doing data analysis 80% of time will be spent on data wrangling where you also become familiar with your dataset. So it's time well spent.
+
+
+You must be aware that when looking at your data and searcing for something interesting is multiple hypothesis testing and you need to adjust your expectations.
 
 
 ## Cancer data from Estonian cancer registry
@@ -129,6 +132,9 @@ incidence <- json_to_df("data/cancer_newcases_PK10.json")
 incidence
 ```
 
+We have columns "Year", "Specified site", "Sex", age groups from "0-4" to "85 and older", "label", "source", "update". 
+
+"Specified site" indicates the anatomical site of the cancer followed by ICD-10 code in parentheses (there is ICD-10 code for "Burned when water skis caught on fire:  Y91.07XA" or "V97.33XD Sucked into jet engine, subsequent encounter").
 
 For better overview let's filter out "Specified site" values that are longer than 30 characters.
 ```{r}
@@ -255,7 +261,7 @@ incidence_long <- gather(data = incidence,
 incidence_long
 ```
 
-Now we have each value on separate row and can filter out missing values. Currently missing values are expicitly labeled with NA-s.
+Now we have each value on separate row and can filter out missing values. Currently missing values are explicitly labeled with NA-s.
 Function `complete.cases()` gives logical vector indicating rows with no missing values (no NA-s).
 Based on this logical vector, `filter()` then keeps only `TRUE` rows.
 ```{r, echo=FALSE}
@@ -356,18 +362,34 @@ The question arises whether men and women still get cancer at the same rate?
 So we have seen increasing numbers of new cases each year during 2000 and 2014.
 Do we have more cancer or does this reflects increase in population size?
 
-
 To answer these question, we need population size normalised values of cancer cases -- **incidence**.
 Cancer incidence is obtained by dividing cancer prevalence with population size.
 
-**Mean population data**.
+
+**incidence = (number of cases / mean annual population) * 100000**
+
+Vähi intsidents on uute mingit tüüpi vähijuhtude arv aastas vastavas populatsioonis.
+Uute juhtude arv võib sisaldada mitmeid ühelt patsiendilt leitud primaarseid vähikoldeid. 
+Primaarne vähisait on see kustkohas see vähk algselt on tekkinud, mitte metastaas. 
+Intsidents ei sisalda tagasi tulnud vähke. 
+Populatsiooni suurus sõltub missugusele kasvajale või kasvajagrupile intsidentsi arvutatakse. 
+Kui näiteks arvutatakse emakakaela vähi intsidentsi, siis kasutatakse ainult naiste populatsiooni suurust.
+
+Vanusrühmade suuruse suhtes kaalutud intsidents ehk vanuskordajad arvutatakse kaalutud keskmise meetodil, kus kaalud saadakse vanuserühmade suurusest.
+
+
+## Vanuserähmade suuruse suhtes kaalutud vähi intsidents
+
+Vähi vanuskordajate arvutamiseks on meil puudu populatsioonisuurused.
+
 We obtained mean annual population data from Statistics Estonia.
 You can download this dataset from "[rstats-tartu/datasets](https://github.com/rstats-tartu/datasets)" repo.
 
 Download population data into our projects "data" subfolder:
 ```{r, message=FALSE}
-url <- "https://raw.githubusercontent.com/rstats-tartu/datasets/master/mean_annual_population.csv"
-download.file(url, "data/mean_annual_population.csv")
+if(!file.exists("data/mean_annual_population.csv")){
+  download.file("https://raw.githubusercontent.com/rstats-tartu/datasets/master/mean_annual_population.csv", "data/mean_annual_population.csv")
+}
 ```
 
 Import mean annual population data.
@@ -390,27 +412,23 @@ pop_long <- mutate(pop, "0-4" = `0` + `1-4`) %>%
 pop_long
 ```
 
-Merge cancer prevalence data with population size into new dataframe "incidence":
+Merge cancer cases with population size data. Note that population values only from years 2000 to 2014 will be merged to incidence_long.
 ```{r}
 incidence_long <- left_join(incidence_long, pop_long)
-## For viewing we select only three columns
-select(incidence_long, age, cases, ave_pop)
+incidence_long
 ```
 
 Cancer incidence is presented as new cases per 100'000.
 Now we have number of new cases and population size side-by-side and can go on to calculate cancer incidence per 100'000 inhabitans:
 ```{r this}
-## Calculate incidence per 100'000
 incidence_year_sex <- incidence_long %>% 
   group_by(Site, Year, Sex) %>% 
   summarise(cases = sum(cases),
             ave_pop = sum(ave_pop)) %>% 
-  mutate(incidence = cases/(ave_pop/1E5))
+  mutate(incidence = (cases / ave_pop) * 100000)
 ## we selected less columns for viewing
 select(incidence_year_sex, Site, Year, incidence, everything())
 ```
-
-
 
 Let's see if we got correct number by comparing our incidence numbers to ones published in [Estonian Health Statistics database]( http://pxweb.tai.ee/PXWeb2015/pxweb/en/02Haigestumus/02Haigestumus__04Pahaloomulised%20kasvajad/PK30.px/table/tableViewLayout2/?rxid=99c3b4bb-c5a7-466d-9f66-2744870afcd7):
 
@@ -459,19 +477,14 @@ We can try to look at this by calculating percent increase in 2014 compared to 2
 incidence_range <- total_incidence_year_sex %>%
   filter(Year %in% c(2000, 2014)) %>% 
   group_by(Sex) %>%
-  summarise(Min = round(min(incidence)),
-            Max = round(max(incidence)),
-            increase = sprintf("%1.0f%%", (1 - Min / Max) * 100))
-knitr::kable(incidence_range, col.names = c("Sex", "2000", "2014", "Increase"))
+  summarise(increase = sprintf("%1.0f%%", (1 - incidence[Year=="2000"] / incidence[Year=="2014"]) * 100))
+knitr::kable(incidence_range, col.names = c("Sex", "Increase"))
 ```
 
 We can see that compared to counts of new cases both men and women show even bigger increase in cancer rates in Estonia. 
 Do we get more cancer or do we diagnose more cancer... ?
 
-
 >We can settle that cancer trend in Estonia is worryingly increasing.
-
-Which age groups get most cancer? Number of new cases versus incidence.
 
 ## What are the most frequent cancer sites?
 
@@ -483,18 +496,24 @@ First, we try to remove some summary variables from table.
 ```{r}
 ## boulder has adhoc function that tries to id parent Sites
 parent_nodes <- boulder::icd_sums(unique(incidence_long$Site))
+parent_nodes
+```
+
+Create vector for subsetting:
+```{r}
 unique_parents <- unique(parent_nodes$Parent)
 ```
 
-This can be also achieved by "manually" specifying Site values to be omitted.
+> This can be also achieved by "manually" specifying Site values to be omitted.
 
-
+## Find most frequent cancer sites
 We calculate incidence for each Site per Sex, let's drop Year by taking its average:
 ```{r}
 incidence_sex_filt <- incidence_year_sex %>% 
   filter(!Site %in% unique_parents) %>% 
   group_by(Site, Sex) %>% 
   summarise(incidence = mean(incidence))
+incidence_sex_filt
 ```
 
 List of top10 cancers by Sex:
@@ -504,6 +523,7 @@ listof_top10 <- incidence_sex_filt %>%
   group_by(Sex) %>% 
   top_n(10, incidence) %>% 
   arrange(desc(incidence))
+listof_top10
 ```
 
 Plot most frequent cancers:
@@ -511,8 +531,8 @@ Plot most frequent cancers:
 incidence_sex_filt %>% 
   filter(Site %in% listof_top10$Site) %>% 
   ggplot(aes(Sex, incidence)) +
-  geom_bar(stat = "identity") +
-  facet_wrap(~ Site) +
+  geom_bar(stat = "identity") + ## use the values that we have in our table
+  facet_wrap(~ Site, labeller = label_wrap_gen(width = 20)) +
   labs(title = "Top10 cancer sites from both genders",
        subtitle = "Mean annual incidence from years 2000 to 2014",
        y = "Cancer incidence per 100000",
@@ -538,12 +558,130 @@ incidence_sex_filt %>%
 
 What these two graphs tell us?
 
+## Cancer takes whole life to develop
+Which age groups get most cancer? Number of new cases versus incidence.
 
-## Age groups
-
+First, we also make age groups numeric for correct x-axis order.
 ```{r}
-
+numeric_agegroup <- function(x) parse_number(str_extract(x, "^[0-9]{1,2}"))
+incidence_long <- incidence_long %>% mutate_at("age", numeric_agegroup)
+incidence_long
 ```
 
 
-# References
+Let's plot cancer incidence versus age groups.
+```{r}
+p <- incidence_long %>% 
+  filter(Site %in% listof_top10$Site) %>%
+  mutate(incidence = (cases / ave_pop) * 100000) %>% 
+  group_by(Sex, Site, age) %>% 
+  summarise(incidence = mean(incidence)) %>% 
+  ggplot(aes(age, incidence, color = Sex)) +
+  geom_line() +
+  facet_wrap(~ Site, labeller = label_wrap_gen(20), scales = "free_y") +
+  scale_color_manual(values = c("darkgray", "orange"))
+p
+```
+We can see that generally cancer incidence peaks at the age of 60+. 
+There are exeptions, like cervical cancer which has peak incidence in 40 year olds.
+
+Cancer incidence increases with age: use log on x and y axis!
+```{r}
+incidence_long %>% 
+  filter(Site %in% listof_top10$Site) %>%
+  mutate(incidence = cases / (ave_pop/1E5)) %>% 
+  group_by(Sex, Site, age) %>% 
+  summarise(incidence = mean(incidence)) %>% 
+  mutate_at(vars(age, incidence), log) %>% 
+  filter(is.finite(incidence), is.finite(age)) %>% 
+  ggplot(aes(age, incidence, color = Sex)) +
+  geom_point() +
+  facet_wrap(~ Site, labeller = label_wrap_gen(20), scales = "free_y") +
+  scale_color_manual(values = c("darkgray", "orange")) +
+  geom_smooth(method = "lm")
+```
+
+There are cancer that show linear relationship between age and incidence, like skin cancer and bladder cancer.
+And there are cancers that initially show increase but then reach plateau, these seem to be mostly gender specific cancers like breast cancer, cervical cancer, and endometrial cancer in women and prostate cancer in men.
+If you compare breast cancer in women and men, then it seems that they have different mechanism...
+
+## Weighted averages
+Previous calculation we summarised all age groups to calculate cancer total population incidence.
+However, age groups in population are of different size and different cancer prevalence. 
+
+Let's try to take into account age-dependent differences in population size when calculating incidence -- by population size as weight.
+
+Plot population sizes of different age groups:
+```{r}
+## install.packages("viridis")
+library(viridis)
+## Plot age group differences
+incidence_long %>% 
+  ungroup() %>% 
+  select(Year, age, Sex, ave_pop) %>%
+  distinct() %>% 
+  ggplot(aes(age, ave_pop, color = Sex, group = Sex)) +
+  geom_jitter(jitter = 0.1) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "Population sizes of different age groups in Estonia",
+       subtitle = "Years 2000 to 2014",
+       caption = "Data: Statistics Estonia.",
+       y = "Mean annual population",
+       x = "Age groups") +
+  scale_color_viridis(discrete = TRUE)
+```
+
+
+Let's calculate age group size weighted incidence values. 
+For comparison, first we recalculate raw incidence and then age-weighted incidence.
+To calculate raw incidence, we first sum up all cases and population size over age groups.
+Then we drop Year by calculating mean incidence across years.
+```{r}
+## raw incidence
+raw_incidence <- incidence_long %>% 
+  group_by(Year, Site, Sex) %>% 
+  summarise(cases = sum(cases),
+            ave_pop = sum(ave_pop)) %>% 
+  mutate(incidence = (cases / ave_pop) * 100000) %>% ## incidence
+  group_by(Site, Sex) %>% 
+  summarise(incidence = mean(incidence),
+            ave_pop = mean(ave_pop))
+raw_incidence
+```
+
+In order to calculate age-weighted incidence we should follow diferent logic.
+Here we start by calculating incidence for each data split in our table: Year, Site, Sex, age.
+Then we go on and calculate mean incidence and average pop size across Years.
+Then we apply weights and calculate weighted average.
+
+```{r}
+## Age weighted incidence
+age_weighted_incidence <- incidence_long %>% 
+  mutate(incidence = (cases / ave_pop) * 100000) %>% ## incidence
+  group_by(Site, Sex, age) %>% ## calculate mean population size and mean incidence across years
+  summarise(incidence = mean(incidence), 
+            ave_pop = mean(ave_pop)) %>% 
+  mutate(wt = ave_pop / sum(ave_pop), ## calculate and apply weights
+         incidence = wt * incidence) %>% 
+  summarise(incidence = sum(incidence), ## calulate weighted average
+            ave_pop = sum(ave_pop))
+age_weighted_incidence
+```
+
+Plot results side by side.
+```{r}
+library(viridis)
+bind_rows(list(raw_incidence, age_weighted_incidence), .id = "type") %>% 
+  filter(Site %in% listof_top10$Site) %>%
+  ggplot(aes(Sex, incidence, fill = type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Site, labeller = label_wrap_gen(20), scales = "free_y") +
+  scale_fill_viridis(discrete = TRUE, labels = c("Raw", "Age-\nweighted"), "Incidence") +
+  labs(y = "Cancer incidence per 100,000",
+       title = "Top10 cancer sites from both genders",
+       subtitle = "Mean annual incidence from years 2000 to 2014",
+       caption = paste("Data:", data_source))
+```
+
+As can be seen, these values are in our case virtually similar.
+
