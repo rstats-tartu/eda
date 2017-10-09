@@ -683,5 +683,6 @@ bind_rows(list(raw_incidence, age_weighted_incidence), .id = "type") %>%
        caption = paste("Data:", data_source))
 ```
 
-As can be seen, these values are in our case virtually similar.
+As you can see, these values are in our case virtually similar.
 
+## References
