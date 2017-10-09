@@ -670,7 +670,6 @@ age_weighted_incidence
 
 Plot results side by side.
 ```{r}
-library(viridis)
 bind_rows(list(raw_incidence, age_weighted_incidence), .id = "type") %>% 
   filter(Site %in% listof_top10$Site) %>%
   ggplot(aes(Sex, incidence, fill = type)) +

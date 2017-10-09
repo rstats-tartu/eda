@@ -973,8 +973,7 @@ age_weighted_incidence</code></pre>
 ## # ... with 136 more rows, and 2 more variables: incidence &lt;dbl&gt;,
 ## #   ave_pop &lt;dbl&gt;</code></pre>
 <p>Plot results side by side.</p>
-<pre class="r"><code>library(viridis)
-bind_rows(list(raw_incidence, age_weighted_incidence), .id = &quot;type&quot;) %&gt;% 
+<pre class="r"><code>bind_rows(list(raw_incidence, age_weighted_incidence), .id = &quot;type&quot;) %&gt;% 
   filter(Site %in% listof_top10$Site) %&gt;%
   ggplot(aes(Sex, incidence, fill = type)) +
   geom_bar(stat = &quot;identity&quot;, position = &quot;dodge&quot;) +
